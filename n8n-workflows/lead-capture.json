@@ -1,1 +1,128 @@
-/mnt/user-data/outputs/n8n-lead-capture.json
+{
+  "name": "YMI Roofing — Lead Capture",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ymi-roofing-lead",
+        "responseMode": "onReceived",
+        "responseCode": 200,
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "f3a1b2c4-d5e6-7890-abcd-ef1234567801",
+      "name": "Lead Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [250, 300],
+      "webhookId": "ymi-roofing-lead"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {"id": "s1", "name": "Name", "value": "={{ $json.body.name }}", "type": "string"},
+            {"id": "s2", "name": "Phone", "value": "={{ $json.body.phone }}", "type": "string"},
+            {"id": "s3", "name": "Suburb", "value": "={{ $json.body.suburb }}", "type": "string"},
+            {"id": "s4", "name": "Service", "value": "={{ $json.body.service || 'Not specified' }}", "type": "string"},
+            {"id": "s5", "name": "Message", "value": "={{ $json.body.message || 'None provided' }}", "type": "string"},
+            {"id": "s6", "name": "Source", "value": "={{ $json.body.source || 'ymi-roofing-website' }}", "type": "string"},
+            {"id": "s7", "name": "Timestamp", "value": "={{ $json.body.submitted_at }}", "type": "string"},
+            {"id": "s8", "name": "Status", "value": "New", "type": "string"}
+          ]
+        },
+        "options": {}
+      },
+      "id": "f3a1b2c4-d5e6-7890-abcd-ef1234567802",
+      "name": "Extract Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [470, 300]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {"__rl": true, "value": "REPLACE_WITH_SPREADSHEET_ID", "mode": "id"},
+        "sheetName": {"__rl": true, "value": "Leads", "mode": "name"},
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {"cellFormat": "USER_ENTERED", "useAppend": true}
+      },
+      "id": "f3a1b2c4-d5e6-7890-abcd-ef1234567803",
+      "name": "Append to Leads Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [690, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_GOOGLE_CREDENTIAL_ID",
+          "name": "Google Sheets — YMI Roofing"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "REPLACE_WITH_TWILIO_FROM_NUMBER",
+        "to": "+61422093241",
+        "message": "=🔔 NEW LEAD — YMI Roofing\n\nName: {{ $('Extract Fields').item.json.Name }}\nPhone: {{ $('Extract Fields').item.json.Phone }}\nSuburb: {{ $('Extract Fields').item.json.Suburb }}\nService: {{ $('Extract Fields').item.json.Service }}\nMessage: {{ $('Extract Fields').item.json.Message }}\n\n{{ $now.format('dd MMM yyyy h:mm a') }}"
+      },
+      "id": "f3a1b2c4-d5e6-7890-abcd-ef1234567804",
+      "name": "SMS Alert to Ben",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [910, 200],
+      "credentials": {
+        "twilioApi": {
+          "id": "REPLACE_WITH_TWILIO_CREDENTIAL_ID",
+          "name": "Twilio — YMI Roofing"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "REPLACE_WITH_TWILIO_FROM_NUMBER",
+        "to": "={{ $('Extract Fields').item.json.Phone }}",
+        "message": "=Hi {{ $('Extract Fields').item.json.Name }}, thanks for contacting YMI Roofing! Ben will be in touch within 2 business hours. For urgent enquiries call 0422 093 241. Reply STOP to opt out."
+      },
+      "id": "f3a1b2c4-d5e6-7890-abcd-ef1234567805",
+      "name": "Confirmation SMS to Lead",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [910, 420],
+      "credentials": {
+        "twilioApi": {
+          "id": "REPLACE_WITH_TWILIO_CREDENTIAL_ID",
+          "name": "Twilio — YMI Roofing"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Lead Webhook": {
+      "main": [[{"node": "Extract Fields", "type": "main", "index": 0}]]
+    },
+    "Extract Fields": {
+      "main": [[{"node": "Append to Leads Sheet", "type": "main", "index": 0}]]
+    },
+    "Append to Leads Sheet": {
+      "main": [[
+        {"node": "SMS Alert to Ben", "type": "main", "index": 0},
+        {"node": "Confirmation SMS to Lead", "type": "main", "index": 0}
+      ]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all"
+  },
+  "versionId": "f3a1b2c4-d5e6-7890-abcd-ef1234567800",
+  "tags": [{"name": "ymi-roofing"}]
+}

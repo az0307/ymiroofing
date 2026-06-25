@@ -1,1 +1,136 @@
-/mnt/user-data/outputs/n8n-review-machine.json
+{
+  "name": "YMI Roofing — Review Machine",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{"field": "cronExpression", "expression": "0 10 * * 1-5"}]
+        }
+      },
+      "id": "b2c3d4e5-f6a7-8901-bcde-f23456789001",
+      "name": "Weekdays 10am",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {"__rl": true, "value": "REPLACE_WITH_SPREADSHEET_ID", "mode": "id"},
+        "sheetName": {"__rl": true, "value": "Jobs", "mode": "name"},
+        "options": {}
+      },
+      "id": "b2c3d4e5-f6a7-8901-bcde-f23456789002",
+      "name": "Read Jobs Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [470, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_GOOGLE_CREDENTIAL_ID",
+          "name": "Google Sheets — YMI Roofing"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {"caseSensitive": false, "leftValue": "", "typeValidation": "loose"},
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.Status }}",
+              "rightValue": "Completed",
+              "operator": {"type": "string", "operation": "equals"}
+            },
+            {
+              "id": "c2",
+              "leftValue": "={{ $json['Review Requested'] || '' }}",
+              "rightValue": "",
+              "operator": {"type": "string", "operation": "equals"}
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b2c3d4e5-f6a7-8901-bcde-f23456789003",
+      "name": "Completed & No Review Sent",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [690, 300]
+    },
+    {
+      "parameters": {
+        "from": "REPLACE_WITH_TWILIO_FROM_NUMBER",
+        "to": "={{ $json.Phone }}",
+        "message": "=Hi {{ $json.Name }}, it's Ben from YMI Roofing. We recently completed your {{ $json.Service }} — we'd really appreciate a Google Review! It helps other locals find us: https://g.page/r/REPLACE_WITH_GOOGLE_PLACE_ID/review\n\nThanks! Reply STOP to opt out."
+      },
+      "id": "b2c3d4e5-f6a7-8901-bcde-f23456789004",
+      "name": "Send Review Request SMS",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [910, 200],
+      "credentials": {
+        "twilioApi": {
+          "id": "REPLACE_WITH_TWILIO_CREDENTIAL_ID",
+          "name": "Twilio — YMI Roofing"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {"__rl": true, "value": "REPLACE_WITH_SPREADSHEET_ID", "mode": "id"},
+        "sheetName": {"__rl": true, "value": "Jobs", "mode": "name"},
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "row_number": "={{ $json.row_number }}",
+            "Review Requested": "={{ $now.format('dd/MM/yyyy') }}"
+          },
+          "matchingColumns": ["row_number"],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "b2c3d4e5-f6a7-8901-bcde-f23456789005",
+      "name": "Mark Review Requested",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [1130, 200],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_GOOGLE_CREDENTIAL_ID",
+          "name": "Google Sheets — YMI Roofing"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Weekdays 10am": {
+      "main": [[{"node": "Read Jobs Sheet", "type": "main", "index": 0}]]
+    },
+    "Read Jobs Sheet": {
+      "main": [[{"node": "Completed & No Review Sent", "type": "main", "index": 0}]]
+    },
+    "Completed & No Review Sent": {
+      "main": [
+        [{"node": "Send Review Request SMS", "type": "main", "index": 0}],
+        []
+      ]
+    },
+    "Send Review Request SMS": {
+      "main": [[{"node": "Mark Review Requested", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all"
+  },
+  "versionId": "b2c3d4e5-f6a7-8901-bcde-f23456789000",
+  "tags": [{"name": "ymi-roofing"}]
+}
