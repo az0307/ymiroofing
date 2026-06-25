@@ -1,1 +1,10 @@
-/mnt/user-data/outputs/wrangler.toml
+name             = "ymiroofing"
+main             = "cf-worker-proxy.js"
+compatibility_date = "2024-11-01"
+
+# N8N_WEBHOOK_URL is a secret — never commit the real URL.
+# Set it once via: wrangler secret put N8N_WEBHOOK_URL
+# Then run:        wrangler deploy
+#
+# The website (index.html) POSTs to this Worker.
+# The Worker forwards to n8n without exposing the n8n URL to the browser.
