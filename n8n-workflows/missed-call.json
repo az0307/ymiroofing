@@ -1,1 +1,80 @@
-/mnt/user-data/outputs/n8n-missed-call.json
+{
+  "name": "YMI Roofing — Missed Call Response",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ymi-missed-call",
+        "responseMode": "onReceived",
+        "responseCode": 200,
+        "options": {}
+      },
+      "id": "c3d4e5f6-a7b8-9012-cdef-345678901001",
+      "name": "Missed Call Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [250, 300],
+      "webhookId": "ymi-missed-call"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {"caseSensitive": false, "leftValue": "", "typeValidation": "loose"},
+          "conditions": [
+            {
+              "id": "mc1",
+              "leftValue": "={{ $json.body.CallStatus || $json.CallStatus || '' }}",
+              "rightValue": "no-answer",
+              "operator": {"type": "string", "operation": "equals"}
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c3d4e5f6-a7b8-9012-cdef-345678901002",
+      "name": "Is Missed Call?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [470, 300]
+    },
+    {
+      "parameters": {
+        "from": "REPLACE_WITH_TWILIO_FROM_NUMBER",
+        "to": "={{ $json.body.From || $json.From }}",
+        "message": "Hi! You just called YMI Roofing. Ben is on the tools right now but will call you back ASAP. Text your suburb & job details to this number for a quick quote. — YMI Roofing"
+      },
+      "id": "c3d4e5f6-a7b8-9012-cdef-345678901003",
+      "name": "SMS Callback Promise",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [690, 200],
+      "credentials": {
+        "twilioApi": {
+          "id": "REPLACE_WITH_TWILIO_CREDENTIAL_ID",
+          "name": "Twilio — YMI Roofing"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Missed Call Webhook": {
+      "main": [[{"node": "Is Missed Call?", "type": "main", "index": 0}]]
+    },
+    "Is Missed Call?": {
+      "main": [
+        [{"node": "SMS Callback Promise", "type": "main", "index": 0}],
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all"
+  },
+  "versionId": "c3d4e5f6-a7b8-9012-cdef-345678901000",
+  "tags": [{"name": "ymi-roofing"}]
+}
