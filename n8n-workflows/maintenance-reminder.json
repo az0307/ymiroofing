@@ -1,1 +1,142 @@
-/mnt/user-data/outputs/n8n-maintenance-reminder.json
+{
+  "name": "YMI Roofing — Annual Maintenance Reminder",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{"field": "cronExpression", "expression": "0 9 1 9 *"}]
+        }
+      },
+      "id": "e5f6a7b8-c9d0-1234-efab-567890123001",
+      "name": "Sept 1 Annual Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {"__rl": true, "value": "REPLACE_WITH_SPREADSHEET_ID", "mode": "id"},
+        "sheetName": {"__rl": true, "value": "Leads", "mode": "name"},
+        "options": {}
+      },
+      "id": "e5f6a7b8-c9d0-1234-efab-567890123002",
+      "name": "Read Past Customers",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [470, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_GOOGLE_CREDENTIAL_ID",
+          "name": "Google Sheets — YMI Roofing"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {"caseSensitive": false, "leftValue": "", "typeValidation": "loose"},
+          "conditions": [
+            {
+              "id": "mr1",
+              "leftValue": "={{ $json.Status }}",
+              "rightValue": "Job Complete",
+              "operator": {"type": "string", "operation": "equals"}
+            },
+            {
+              "id": "mr2",
+              "leftValue": "={{ $json.Phone }}",
+              "rightValue": "",
+              "operator": {"type": "string", "operation": "notEquals"}
+            },
+            {
+              "id": "mr3",
+              "leftValue": "={{ $json['Maintenance Reminder Sent'] || '' }}",
+              "rightValue": "",
+              "operator": {"type": "string", "operation": "equals"}
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e5f6a7b8-c9d0-1234-efab-567890123003",
+      "name": "Eligible for Reminder?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [690, 300]
+    },
+    {
+      "parameters": {
+        "from": "REPLACE_WITH_TWILIO_FROM_NUMBER",
+        "to": "={{ $json.Phone }}",
+        "message": "=Hi {{ $json.Name }}, it's Ben from YMI Roofing. With summer coming up, now's the perfect time to check your roof before the wet season. We offer free re-inspections for past customers — call or text 0422 093 241 to book. Reply STOP to opt out."
+      },
+      "id": "e5f6a7b8-c9d0-1234-efab-567890123004",
+      "name": "Send Maintenance Reminder",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [910, 200],
+      "credentials": {
+        "twilioApi": {
+          "id": "REPLACE_WITH_TWILIO_CREDENTIAL_ID",
+          "name": "Twilio — YMI Roofing"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {"__rl": true, "value": "REPLACE_WITH_SPREADSHEET_ID", "mode": "id"},
+        "sheetName": {"__rl": true, "value": "Leads", "mode": "name"},
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "row_number": "={{ $json.row_number }}",
+            "Maintenance Reminder Sent": "={{ $now.format('dd/MM/yyyy') }}"
+          },
+          "matchingColumns": ["row_number"],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "e5f6a7b8-c9d0-1234-efab-567890123005",
+      "name": "Mark Reminder Sent",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [1130, 200],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_GOOGLE_CREDENTIAL_ID",
+          "name": "Google Sheets — YMI Roofing"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Sept 1 Annual Trigger": {
+      "main": [[{"node": "Read Past Customers", "type": "main", "index": 0}]]
+    },
+    "Read Past Customers": {
+      "main": [[{"node": "Eligible for Reminder?", "type": "main", "index": 0}]]
+    },
+    "Eligible for Reminder?": {
+      "main": [
+        [{"node": "Send Maintenance Reminder", "type": "main", "index": 0}],
+        []
+      ]
+    },
+    "Send Maintenance Reminder": {
+      "main": [[{"node": "Mark Reminder Sent", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all"
+  },
+  "versionId": "e5f6a7b8-c9d0-1234-efab-567890123000",
+  "tags": [{"name": "ymi-roofing"}]
+}

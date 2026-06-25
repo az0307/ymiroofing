@@ -1,1 +1,112 @@
-/mnt/user-data/outputs/n8n-sms-optout.json
+{
+  "name": "YMI Roofing — SMS Opt-Out Handler",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ymi-sms-inbound",
+        "responseMode": "onReceived",
+        "responseCode": 200,
+        "options": {}
+      },
+      "id": "d4e5f6a7-b8c9-0123-defa-456789012001",
+      "name": "Inbound SMS Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [250, 300],
+      "webhookId": "ymi-sms-inbound"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {"caseSensitive": false, "leftValue": "", "typeValidation": "loose"},
+          "conditions": [
+            {
+              "id": "oo1",
+              "leftValue": "={{ ($json.body.Body || $json.Body || '').toUpperCase() }}",
+              "rightValue": "STOP",
+              "operator": {"type": "string", "operation": "contains"}
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d4e5f6a7-b8c9-0123-defa-456789012002",
+      "name": "Is STOP Request?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [470, 300]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {"__rl": true, "value": "REPLACE_WITH_SPREADSHEET_ID", "mode": "id"},
+        "sheetName": {"__rl": true, "value": "Opt-Outs", "mode": "name"},
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Phone": "={{ $json.body.From || $json.From }}",
+            "Opted Out": "={{ $now.format('dd/MM/yyyy HH:mm') }}",
+            "Message": "={{ $json.body.Body || $json.Body }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "d4e5f6a7-b8c9-0123-defa-456789012003",
+      "name": "Log Opt-Out",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [690, 200],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_GOOGLE_CREDENTIAL_ID",
+          "name": "Google Sheets — YMI Roofing"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "REPLACE_WITH_TWILIO_FROM_NUMBER",
+        "to": "={{ $json.body.From || $json.From }}",
+        "message": "You have been unsubscribed from YMI Roofing SMS messages and will receive no further marketing texts. For enquiries call 0422 093 241."
+      },
+      "id": "d4e5f6a7-b8c9-0123-defa-456789012004",
+      "name": "Opt-Out Confirmation SMS",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [910, 200],
+      "credentials": {
+        "twilioApi": {
+          "id": "REPLACE_WITH_TWILIO_CREDENTIAL_ID",
+          "name": "Twilio — YMI Roofing"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Inbound SMS Webhook": {
+      "main": [[{"node": "Is STOP Request?", "type": "main", "index": 0}]]
+    },
+    "Is STOP Request?": {
+      "main": [
+        [{"node": "Log Opt-Out", "type": "main", "index": 0}],
+        []
+      ]
+    },
+    "Log Opt-Out": {
+      "main": [[{"node": "Opt-Out Confirmation SMS", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all"
+  },
+  "versionId": "d4e5f6a7-b8c9-0123-defa-456789012000",
+  "tags": [{"name": "ymi-roofing"}]
+}
