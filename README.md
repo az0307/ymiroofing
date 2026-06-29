@@ -51,6 +51,13 @@ ymiroofing/
 5. **(Optional) Import n8n workflows** for SMS/Sheets automations. The Worker will forward if secret is set.
 6. Verify form posts to Worker, Worker sends email, visitor sees success without mail client.
 
+**Pre-launch checklist**
+- Worker secrets + KV set and deployed
+- Form test on no-mail-client device (success + inbox)
+- Error path shows inline + mailto link
+- CORS only prod origins
+- Labels + skip link verified
+
 Full step-by-step: see `docs/MASTER-DELIVERY.md`
 
 ---
