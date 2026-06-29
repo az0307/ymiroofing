@@ -1,0 +1,239 @@
+{
+  "name": "YMI Roofing \u2014 Review Machine",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "ymi-review-done",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "rev-wh-01",
+      "name": "Job Done Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        200,
+        300
+      ],
+      "webhookId": "ymi-review-wh-01"
+    },
+    {
+      "parameters": {
+        "jsCode": "const qs = $input.first().json.query || {};\nconst name   = (qs.name   || qs.customer_name || '').trim();\nconst phone  = (qs.phone  || qs.customer_phone || '').trim();\nconst suburb = (qs.suburb || '').trim();\nif (!name || !phone) {\n  throw new Error('Missing name or phone in query params');\n}\nlet e164 = phone.replace(/[\\s\\-()]/g, '');\nif (e164.startsWith('0')) e164 = '+61' + e164.slice(1);\nif (!e164.startsWith('+')) e164 = '+61' + e164;\nconst firstName = name.split(' ')[0];\nreturn [{ json: { name, firstName, phone: e164, raw_phone: phone, suburb,\n  job_date: new Date().toLocaleDateString('en-AU', { timeZone: 'Australia/Melbourne' })\n}}];"
+      },
+      "id": "rev-code-01",
+      "name": "Parse Job Details",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Jobs",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Job Date": "={{ $json.job_date }}",
+            "Customer Name": "={{ $json.name }}",
+            "Customer Phone": "={{ $json.phone }}",
+            "Suburb": "={{ $json.suburb }}",
+            "Review Requested": "No",
+            "Review Received": "No"
+          }
+        },
+        "options": {}
+      },
+      "id": "rev-sheets-01",
+      "name": "Log Completed Job",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        640,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ '\u2705 Thanks Ben! Review request queued for ' + $json.name + '. They will receive an SMS tomorrow.' }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "rev-respond-01",
+      "name": "Confirm to Ben",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        640,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 24,
+        "unit": "hours"
+      },
+      "id": "rev-wait-01",
+      "name": "Wait 24 Hours",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        860,
+        300
+      ],
+      "webhookId": "rev-wait-wh-01"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "from": "REPLACE_TWILIO_NUMBER",
+        "to": "={{ $json.phone }}",
+        "message": "={{ 'Hi ' + $json.firstName + '! It was great working on your roof. If you have 60 seconds, we would really appreciate a quick Google review \u2014 it helps other Melbourne homeowners find us. Here is the direct link: https://g.page/r/REPLACE_GOOGLE_PLACE_ID/review\\n\\nThanks, Ben from Y.M.I Roofing \ud83d\udcde 0422 093 241' }}",
+        "options": {}
+      },
+      "id": "rev-twilio-01",
+      "name": "SMS Review Request",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        1080,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 72,
+        "unit": "hours"
+      },
+      "id": "rev-wait-02",
+      "name": "Wait 72 More Hours",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        1300,
+        300
+      ],
+      "webhookId": "rev-wait-wh-02"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "from": "REPLACE_TWILIO_NUMBER",
+        "to": "={{ $json.phone }}",
+        "message": "={{ 'Hi ' + $json.firstName + ', Ben here from Y.M.I Roofing. Hope the roof is looking great! If you get a moment, a quick Google review means the world to a small business: https://g.page/r/REPLACE_GOOGLE_PLACE_ID/review \u2014 cheers! \ud83d\ude4f' }}",
+        "options": {}
+      },
+      "id": "rev-twilio-02",
+      "name": "SMS Follow-Up",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        1520,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Job Done Trigger": {
+      "main": [
+        [
+          {
+            "node": "Parse Job Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Job Details": {
+      "main": [
+        [
+          {
+            "node": "Log Completed Job",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Confirm to Ben",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Completed Job": {
+      "main": [
+        [
+          {
+            "node": "Wait 24 Hours",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 24 Hours": {
+      "main": [
+        [
+          {
+            "node": "SMS Review Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SMS Review Request": {
+      "main": [
+        [
+          {
+            "node": "Wait 72 More Hours",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 72 More Hours": {
+      "main": [
+        [
+          {
+            "node": "SMS Follow-Up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "YMI Roofing"
+    },
+    {
+      "name": "Review Machine"
+    },
+    {
+      "name": "Aurora"
+    }
+  ]
+}

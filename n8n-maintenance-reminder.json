@@ -1,0 +1,186 @@
+{
+  "name": "YMI Roofing \u2014 Maintenance Reminder v2",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 1 9 *"
+            }
+          ]
+        }
+      },
+      "id": "mr-cron-01",
+      "name": "Run 1st Sept 9AM Annually",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Jobs",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "mr-sheets-01",
+      "name": "Get Completed Jobs",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        420,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Opt-Outs",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "mr-optout-01",
+      "name": "Get Opt-Out List",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        420,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Jobs come from the first input\nconst jobs = $input.all();\n\n// Build opt-out set \u2014 passed in via second input using $('Get Opt-Out List')\n// n8n merges inputs; filter by sheet source via node reference\nconst optOutRows = $('Get Opt-Out List').all();\nconst optedOut = new Set(optOutRows.map(r => (r.json['Phone'] || '').trim()));\n\n// Date range: 10\u201314 months ago\nconst now = new Date();\nconst tooRecent = new Date(now); tooRecent.setMonth(now.getMonth() - 10);\nconst tooOld    = new Date(now); tooOld.setMonth(now.getMonth() - 14);\n\nconst due = jobs.filter(row => {\n  const phone = (row.json['Customer Phone'] || '').trim();\n  if (!phone) return false;\n  // Skip opted-out numbers\n  if (optedOut.has(phone)) { console.log('Skipping opted-out:', phone); return false; }\n  // Date range check\n  const d = new Date(row.json['Job Date']);\n  if (isNaN(d)) return false;\n  return d >= tooOld && d <= tooRecent;\n});\n\nconsole.log('Due for reminder:', due.length, '| Opted-out skipped:', jobs.length - due.length);\n\nreturn due.map(row => ({ json: {\n  name:  (row.json['Customer Name']  || '').trim(),\n  first: (row.json['Customer Name']  || 'there').split(' ')[0],\n  phone: (row.json['Customer Phone'] || '').trim(),\n  date:  row.json['Job Date']\n}}));"
+      },
+      "id": "mr-code-01",
+      "name": "Filter Due and Not Opted Out",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {
+          "reset": false
+        }
+      },
+      "id": "mr-split-01",
+      "name": "Process One at a Time",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        880,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "from": "REPLACE_TWILIO_NUMBER",
+        "to": "={{ $json.phone }}",
+        "message": "={{ 'Hi ' + $json.first + '! Ben here from Y.M.I Roofing \u2014 we worked on your roof in ' + $json.date + '. Spring is a great time for a quick check before summer storms. Free inspection for past clients \u2014 call 0422\\u00a0093\\u00a0241 or visit ymiroofing.com.au \ud83c\udfe0\\nReply STOP to unsubscribe.' }}",
+        "options": {}
+      },
+      "id": "mr-twilio-01",
+      "name": "Send Maintenance SMS",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Run 1st Sept 9AM Annually": {
+      "main": [
+        [
+          {
+            "node": "Get Completed Jobs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Opt-Out List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Completed Jobs": {
+      "main": [
+        [
+          {
+            "node": "Filter Due and Not Opted Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Due and Not Opted Out": {
+      "main": [
+        [
+          {
+            "node": "Process One at a Time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process One at a Time": {
+      "main": [
+        [
+          {
+            "node": "Send Maintenance SMS",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "YMI Roofing"
+    },
+    {
+      "name": "Maintenance v2"
+    },
+    {
+      "name": "Aurora"
+    }
+  ]
+}

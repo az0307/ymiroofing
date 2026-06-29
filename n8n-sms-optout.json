@@ -1,0 +1,199 @@
+{
+  "name": "YMI Roofing \u2014 SMS Opt-Out Handler",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ymi-sms-inbound",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "oo-wh-01",
+      "name": "Twilio Inbound SMS",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        200,
+        300
+      ],
+      "webhookId": "ymi-sms-inbound-01"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || {};\nconst from    = body.From || '';\nconst msgBody = (body.Body || '').trim().toUpperCase();\nconst isStop  = ['STOP','STOPALL','UNSUBSCRIBE','CANCEL','END','QUIT'].includes(msgBody);\nconst isStart = ['START','YES','UNSTOP'].includes(msgBody);\nconst isReply = !isStop && !isStart;\n\nreturn [{ json: { from, body: body.Body || '', isStop, isStart, isReply,\n  ts: new Date().toLocaleString('en-AU', { timeZone: 'Australia/Melbourne' })\n}}];"
+      },
+      "id": "oo-code-01",
+      "name": "Parse Intent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.isStop }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "oo-if-01",
+      "name": "Is STOP?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        640,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Opt-Outs",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Phone": "={{ $json.from }}",
+            "Opted Out": "={{ $json.ts }}",
+            "Message": "={{ $json.body }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "oo-sheets-01",
+      "name": "Log Opt-Out",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        860,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "from": "REPLACE_TWILIO_NUMBER",
+        "to": "={{ $json.from }}",
+        "message": "You have been unsubscribed from Y.M.I Roofing messages. Reply START to re-subscribe. For urgent enquiries call 0422 093 241.",
+        "options": {}
+      },
+      "id": "oo-twilio-01",
+      "name": "Confirm Opt-Out",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        1080,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "from": "REPLACE_TWILIO_NUMBER",
+        "to": "+61422093241",
+        "message": "={{ '\ud83d\udce9 SMS REPLY from ' + $json.from + ':\\n\"' + $json.body + '\"\\n\\nForwarded from Y.M.I Roofing inbox.' }}",
+        "options": {}
+      },
+      "id": "oo-twilio-02",
+      "name": "Relay Reply to Ben",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        860,
+        420
+      ]
+    }
+  ],
+  "connections": {
+    "Twilio Inbound SMS": {
+      "main": [
+        [
+          {
+            "node": "Parse Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Intent": {
+      "main": [
+        [
+          {
+            "node": "Is STOP?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is STOP?": {
+      "main": [
+        [
+          {
+            "node": "Log Opt-Out",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Relay Reply to Ben",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Opt-Out": {
+      "main": [
+        [
+          {
+            "node": "Confirm Opt-Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "YMI Roofing"
+    },
+    {
+      "name": "Opt-Out"
+    },
+    {
+      "name": "Compliance"
+    },
+    {
+      "name": "Aurora"
+    }
+  ]
+}

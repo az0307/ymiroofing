@@ -1,0 +1,47 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Aurora AI Agency — YMI Roofing
+# GitHub Actions: Auto-deploy to Cloudflare Pages on every push to main
+#
+# SETUP STEPS:
+#   1. In GitHub repo: Settings → Secrets → Actions → New repository secret
+#      CLOUDFLARE_API_TOKEN  = your Cloudflare API token (Zone:Read + Pages:Edit)
+#      CLOUDFLARE_ACCOUNT_ID = your Cloudflare Account ID (from dashboard URL)
+#   2. Create Cloudflare Pages project named: ymi-roofing-frontend
+#   3. Push this file to .github/workflows/deploy.yml
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Deploy YMI Roofing to Cloudflare Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:          # allow manual trigger from GitHub UI
+
+jobs:
+  deploy:
+    name: Deploy to Cloudflare Pages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/pages-action@v1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: ymi-roofing-frontend
+          directory: .          # index.html is at repo root
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+          branch: main
+          wranglerVersion: '3'
+
+      - name: Deployment summary
+        run: |
+          echo "✅ YMI Roofing deployed to Cloudflare Pages"
+          echo "🌐 Production: https://ymiroofing.com.au"
+          echo "📄 Preview:    https://ymi-roofing-frontend.pages.dev"

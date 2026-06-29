@@ -1,0 +1,228 @@
+{
+  "name": "YMI Roofing \u2014 Missed Call Text-Back v2",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ymi-missed-call",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "mc-wh-01",
+      "name": "Twilio Call Status Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        200,
+        300
+      ],
+      "webhookId": "ymi-missed-call-01"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || {};\nconst callStatus = body.CallStatus || '';\nconst callerNum  = body.From        || '';\nconst callSid    = body.CallSid     || '';\n\n// Only act on missed statuses\nconst missed = ['no-answer','busy','failed','canceled'];\nif (!missed.includes(callStatus)) return [];\n\n// Drop withheld / anonymous numbers\nif (!callerNum || callerNum === 'anonymous' || callerNum === '+61' || callerNum.length < 10) return [];\n\n// \u2500\u2500 BUSINESS HOURS CHECK (AEST/AEDT, UTC+10/+11)\nconst now = new Date();\n// Get Melbourne time (UTC+10 base, no DST adjustment needed \u2014 Twilio fires in real-time)\nconst melb = new Date(now.toLocaleString('en-US', { timeZone: 'Australia/Melbourne' }));\nconst hour = melb.getHours();\nconst day  = melb.getDay(); // 0=Sun, 6=Sat\nconst isBusinessHours = (hour >= 7 && hour < 19) && (day >= 1 && day <= 6);\n\n// Build appropriate callback message\nconst callbackTime = isBusinessHours\n  ? 'within 30 minutes'\n  : 'first thing tomorrow morning';\n\nconst ts = melb.toLocaleString('en-AU');\n\nreturn [{ json: {\n  caller: callerNum,\n  call_sid: callSid,\n  call_status: callStatus,\n  callback_time: callbackTime,\n  is_business_hours: isBusinessHours,\n  timestamp: ts\n}}];"
+      },
+      "id": "mc-code-01",
+      "name": "Check Status + Business Hours",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "lookupOrCreate",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Missed Calls",
+          "mode": "name"
+        },
+        "lookupColumn": "CallSid",
+        "lookupValue": "={{ $json.call_sid }}",
+        "options": {}
+      },
+      "id": "mc-dedup-01",
+      "name": "Check for Duplicate CallSid",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "conditions": [
+            {
+              "leftValue": "={{ $json['CallSid'] }}",
+              "rightValue": "={{ $('Check Status + Business Hours').item.json.call_sid }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ]
+        },
+        "combineOperation": "all"
+      },
+      "id": "mc-if-01",
+      "name": "Is New Call?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        880,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "from": "REPLACE_TWILIO_NUMBER",
+        "to": "={{ $('Check Status + Business Hours').item.json.caller }}",
+        "message": "={{ 'Hi! Sorry we missed your call. Ben from Y.M.I Roofing will call you back ' + $('Check Status + Business Hours').item.json.callback_time + '. For urgent roof repairs call 0422\\u00a0093\\u00a0241 or visit ymiroofing.com.au \u2014 Ben' }}",
+        "options": {}
+      },
+      "id": "mc-twilio-01",
+      "name": "Text-Back to Caller",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "from": "REPLACE_TWILIO_NUMBER",
+        "to": "+61422093241",
+        "message": "={{ '\ud83d\udcf5 MISSED CALL\\nCaller: ' + $('Check Status + Business Hours').item.json.caller + '\\nTime: ' + $('Check Status + Business Hours').item.json.timestamp + '\\nStatus: ' + $('Check Status + Business Hours').item.json.call_status + '\\n\\nAuto text-back sent. Call them back ' + $('Check Status + Business Hours').item.json.callback_time + '!' }}",
+        "options": {}
+      },
+      "id": "mc-twilio-02",
+      "name": "Alert Ben",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Missed Calls",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $('Check Status + Business Hours').item.json.timestamp }}",
+            "Caller": "={{ $('Check Status + Business Hours').item.json.caller }}",
+            "CallSid": "={{ $('Check Status + Business Hours').item.json.call_sid }}",
+            "Status": "={{ $('Check Status + Business Hours').item.json.call_status }}",
+            "Text-Back": "Sent",
+            "Business Hrs": "={{ $('Check Status + Business Hours').item.json.is_business_hours }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "mc-sheets-01",
+      "name": "Log Missed Call",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        540
+      ]
+    }
+  ],
+  "connections": {
+    "Twilio Call Status Webhook": {
+      "main": [
+        [
+          {
+            "node": "Check Status + Business Hours",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Status + Business Hours": {
+      "main": [
+        [
+          {
+            "node": "Check for Duplicate CallSid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check for Duplicate CallSid": {
+      "main": [
+        [
+          {
+            "node": "Is New Call?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is New Call?": {
+      "main": [
+        [
+          {
+            "node": "Text-Back to Caller",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Alert Ben",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log Missed Call",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "YMI Roofing"
+    },
+    {
+      "name": "Missed Call v2"
+    },
+    {
+      "name": "Aurora"
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+# YMI Roofing — Cloudflare Worker proxy (rate limit + reliable lead delivery)
+# Deploy from this dir:  cd worker && wrangler deploy
+#
+# REQUIRED SECRETS (never commit):
+#   wrangler secret put RESEND_API_KEY     # Resend API key (https://resend.com) — primary reliable email path
+#
+# OPTIONAL (for existing n8n automations/SMS etc):
+#   wrangler secret put N8N_WEBHOOK_URL
+#
+# KV: create a KV namespace in dashboard, paste ID below (or use `wrangler kv:namespace create RATE_LIMIT_KV`)
+# Pages route or custom domain + Worker route: ymiroofing.com.au/api/lead
+
+name = "ymi-roofing-proxy"
+main = "cf-worker-proxy.js"
+compatibility_date = "2025-06-01"
+
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+[vars]
+# (Optional public vars only — secrets go in `wrangler secret put`)
+
+[env.production]
+name = "ymi-roofing-proxy-production"
+route = { pattern = "ymiroofing.com.au/api/lead", zone_name = "ymiroofing.com.au" }

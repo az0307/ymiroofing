@@ -1,0 +1,335 @@
+{
+  "name": "YMI Roofing \u2014 Review Machine v2",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "ymi-review-done",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "rev-wh-01",
+      "name": "Job Done Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        200,
+        300
+      ],
+      "webhookId": "ymi-review-wh-01"
+    },
+    {
+      "parameters": {
+        "jsCode": "const qs = $input.first().json.query || {};\nconst name   = (qs.name   || '').trim().slice(0, 100);\nconst phone  = (qs.phone  || '').trim().slice(0, 20);\nconst suburb = (qs.suburb || '').trim().slice(0, 100);\nif (!name || !phone) throw new Error('Missing name or phone');\nlet e164 = phone.replace(/[\\s\\-()]/g, '');\nif (e164.startsWith('0')) e164 = '+61' + e164.slice(1);\nif (!e164.startsWith('+')) e164 = '+61' + e164;\nconst firstName = name.split(' ')[0];\nconst jobDate = new Date().toLocaleDateString('en-AU', { timeZone: 'Australia/Melbourne' });\nreturn [{ json: { name, firstName, phone: e164, raw_phone: phone, suburb, job_date: jobDate } }];"
+      },
+      "id": "rev-code-01",
+      "name": "Parse Job Details",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Opt-Outs",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "rev-optout-01",
+      "name": "Read Opt-Out List",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        640,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the customer phone from earlier node\nconst customerPhone = $('Parse Job Details').item.json.phone;\n\n// Build set of opted-out numbers from Sheets rows\nconst optedOut = new Set(\n  $input.all().map(row => (row.json['Phone'] || '').trim())\n);\n\nconst blocked = optedOut.has(customerPhone);\nif (blocked) {\n  console.log('[Aurora] Phone opted out \u2014 skipping review request:', customerPhone);\n}\n\n// Pass through the original job data plus blocked flag\nreturn [{ json: {\n  ...$('Parse Job Details').item.json,\n  is_opted_out: blocked\n}}];"
+      },
+      "id": "rev-optout-02",
+      "name": "Check Opt-Out Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        860,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "conditions": [
+            {
+              "leftValue": "={{ $json.is_opted_out }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "rev-if-01",
+      "name": "Customer Opted Out?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1060,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Jobs",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Job Date": "={{ $json.job_date }}",
+            "Customer Name": "={{ $json.name }}",
+            "Customer Phone": "={{ $json.phone }}",
+            "Suburb": "={{ $json.suburb }}",
+            "Review Requested": "No",
+            "Review Received": "No"
+          }
+        },
+        "options": {}
+      },
+      "id": "rev-sheets-01",
+      "name": "Log Completed Job",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        1280,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ '\u2705 Thanks Ben! Review request queued for ' + $json.name + '. SMS sends tomorrow.' }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "rev-respond-01",
+      "name": "Confirm to Ben",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1280,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 24,
+        "unit": "hours"
+      },
+      "id": "rev-wait-01",
+      "name": "Wait 24 Hours",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        1500,
+        200
+      ],
+      "webhookId": "rev-wait-wh-01"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "from": "REPLACE_TWILIO_NUMBER",
+        "to": "={{ $json.phone }}",
+        "message": "={{ 'Hi ' + $json.firstName + '! It was great working on your roof. If you have 60 seconds, a quick Google review helps other Melbourne homeowners find us: https://g.page/r/REPLACE_GOOGLE_PLACE_ID/review\\n\\nThanks, Ben from Y.M.I Roofing \ud83d\udcde 0422 093 241\\nReply STOP to unsubscribe.' }}",
+        "options": {}
+      },
+      "id": "rev-twilio-01",
+      "name": "SMS Review Request",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        1720,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 72,
+        "unit": "hours"
+      },
+      "id": "rev-wait-02",
+      "name": "Wait 72 More Hours",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        1940,
+        200
+      ],
+      "webhookId": "rev-wait-wh-02"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "from": "REPLACE_TWILIO_NUMBER",
+        "to": "={{ $json.phone }}",
+        "message": "={{ 'Hi ' + $json.firstName + ', Ben here from Y.M.I Roofing. Hope the roof is looking great! A quick Google review means the world to a small business: https://g.page/r/REPLACE_GOOGLE_PLACE_ID/review \u2014 cheers \ud83d\ude4f\\nReply STOP to unsubscribe.' }}",
+        "options": {}
+      },
+      "id": "rev-twilio-02",
+      "name": "SMS Follow-Up",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        2160,
+        200
+      ]
+    }
+  ],
+  "connections": {
+    "Job Done Trigger": {
+      "main": [
+        [
+          {
+            "node": "Parse Job Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Job Details": {
+      "main": [
+        [
+          {
+            "node": "Read Opt-Out List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Opt-Out List": {
+      "main": [
+        [
+          {
+            "node": "Check Opt-Out Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Opt-Out Status": {
+      "main": [
+        [
+          {
+            "node": "Customer Opted Out?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Customer Opted Out?": {
+      "main": [
+        [
+          {
+            "node": "Log Completed Job",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Confirm to Ben",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Log Completed Job": {
+      "main": [
+        [
+          {
+            "node": "Wait 24 Hours",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 24 Hours": {
+      "main": [
+        [
+          {
+            "node": "SMS Review Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SMS Review Request": {
+      "main": [
+        [
+          {
+            "node": "Wait 72 More Hours",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 72 More Hours": {
+      "main": [
+        [
+          {
+            "node": "SMS Follow-Up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "YMI Roofing"
+    },
+    {
+      "name": "Review Machine v2"
+    },
+    {
+      "name": "Aurora"
+    }
+  ]
+}

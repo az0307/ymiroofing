@@ -1,0 +1,184 @@
+{
+  "name": "YMI Roofing \u2014 Lead Capture",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ymi-roofing-lead",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "node-wh-01",
+      "name": "Receive Lead",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "ymi-lead-wh-01"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json || {};\nconst hp = body._hp_ymir || body.website_hp || '';\nif (hp.trim() !== '') { console.warn('[Aurora] Bot caught'); return []; }\nlet phone = (body.phone || '').trim().replace(/[\\s\\-()]/g, '');\nif (phone.startsWith('0')) phone = '+61' + phone.slice(1);\nif (!phone.startsWith('+')) phone = '+61' + phone;\nconst ts = new Date().toLocaleString('en-AU', { timeZone: 'Australia/Melbourne' });\nreturn [{ json: {\n  name: (body.name || '').trim() || 'Unknown',\n  phone, raw_phone: body.phone || '',\n  suburb: (body.suburb || 'Not provided').trim(),\n  service: body.service || 'Not specified',\n  message: (body.message || 'None provided').trim(),\n  submitted_at: ts, source: 'ymi-roofing-website'\n}}];"
+      },
+      "id": "node-code-01",
+      "name": "Sanitize and Validate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Leads",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $json.submitted_at }}",
+            "Name": "={{ $json.name }}",
+            "Phone": "={{ $json.phone }}",
+            "Suburb": "={{ $json.suburb }}",
+            "Service": "={{ $json.service }}",
+            "Message": "={{ $json.message }}",
+            "Source": "={{ $json.source }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "node-sheets-01",
+      "name": "Log to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "from": "REPLACE_TWILIO_NUMBER",
+        "to": "+61422093241",
+        "message": "={{ '\ud83d\udea8 NEW LEAD \u2014 Y.M.I ROOFING \ud83d\udea8\\n\\n\ud83d\udc64 ' + $json.name + '\\n\ud83d\udcde ' + $json.phone + '\\n\ud83d\udccd ' + $json.suburb + '\\n\ud83d\udee0\ufe0f ' + $json.service + '\\n\ud83d\udcdd ' + $json.message + '\\n\\n\u23f1\ufe0f ' + $json.submitted_at + '\\n\\nTap to call back now.' }}",
+        "options": {}
+      },
+      "id": "node-twilio-01",
+      "name": "SMS to Ben Primary",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        900,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "from": "REPLACE_TWILIO_NUMBER",
+        "to": "+61423858503",
+        "message": "={{ '\ud83d\udea8 YMI LEAD: ' + $json.name + ' | ' + $json.phone + ' | ' + $json.suburb + ' | ' + $json.service }}",
+        "options": {}
+      },
+      "id": "node-twilio-02",
+      "name": "SMS to Ben Secondary",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        900,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{ \"success\": true, \"message\": \"Lead received\" }",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "node-respond-01",
+      "name": "Respond 200 OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Receive Lead": {
+      "main": [
+        [
+          {
+            "node": "Sanitize and Validate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sanitize and Validate": {
+      "main": [
+        [
+          {
+            "node": "Log to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log to Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "SMS to Ben Primary",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "SMS to Ben Secondary",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Respond 200 OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "YMI Roofing"
+    },
+    {
+      "name": "Lead Capture"
+    },
+    {
+      "name": "Aurora"
+    }
+  ]
+}
