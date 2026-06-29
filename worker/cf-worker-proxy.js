@@ -1,16 +1,18 @@
 /**
- * Aurora AI Agency — YMI Roofing
- * Cloudflare Worker: Rate-limited proxy for n8n webhook
+ * YMI Roofing — Cloudflare Worker (rate-limited proxy + reliable delivery)
  *
- * Deploy: wrangler deploy
- * Set env vars in Cloudflare dashboard:
- *   N8N_WEBHOOK_URL = https://your-n8n-domain/webhook/ymi-roofing-lead
+ * Deploy: cd worker && wrangler deploy
  *
- * This Worker:
- *  1. Rate-limits to 5 POST requests per IP per hour
- *  2. Hides the real n8n URL from browser source
- *  3. Validates Content-Type and basic payload shape
- *  4. Adds CORS for ymiroofing.com.au only
+ * Secrets (wrangler secret put ...):
+ *   RESEND_API_KEY   — REQUIRED for email to business inbox (no mail client needed)
+ *   N8N_WEBHOOK_URL  — OPTIONAL (forwards if set)
+ *
+ * Guarantees:
+ * - CORS locked to https://ymiroofing.com.au + https://www.ymiroofing.com.au
+ * - 3 POSTs / IP / 60s
+ * - name + phone required
+ * - On success: { "status": "ok" }
+ * - On failure: JSON error (client shows inline + mailto fallback)
  */
 
 // CORS: locked to production origins only (per spec)
