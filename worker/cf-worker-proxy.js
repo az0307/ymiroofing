@@ -26,6 +26,8 @@ const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 
 export default {
   async fetch(request, env, ctx) {
+    const origin = request.headers.get("Origin") || "";
+
     // ── CORS preflight
     if (request.method === "OPTIONS") {
       const allowOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
@@ -48,7 +50,6 @@ export default {
     }
 
     // ── Origin check (strict prod only)
-    const origin = request.headers.get("Origin") || "";
     const isAllowed = ALLOWED_ORIGINS.includes(origin) || origin.endsWith(".pages.dev"); // allow CF preview deploys
     if (!isAllowed) {
       return new Response(JSON.stringify({ error: "Forbidden" }), {
