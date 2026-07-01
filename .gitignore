@@ -1,0 +1,27 @@
+# Secrets — NEVER commit these
+.env
+*.env
+.env.*
+!.env.example
+
+# Backup dumps
+*.sql
+*.sql.gz
+/backups/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node (if any scripts)
+node_modules/
+
+# Python
+__pycache__/
+*.pyc

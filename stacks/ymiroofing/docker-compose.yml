@@ -1,0 +1,252 @@
+# YMI Roofing client stack — Docker Compose
+# Images pinned to semver. Update via: make update
+# Secrets: copy .env.example → .env and fill in all values before running.
+
+name: ymiroofing
+
+services:
+
+  # ─── Reverse Proxy + TLS ─────────────────────────────────────────────
+  caddy:
+    image: ymi_caddy:2.9.1   # built locally with cloudflare DNS plugin
+    build:
+      context: .
+      dockerfile: Dockerfile.caddy
+    container_name: ymi_caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"   # HTTP/3 QUIC
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      CF_API_TOKEN: ${CF_API_TOKEN}
+    networks:
+      - frontend
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ─── n8n (main UI + webhook process) ─────────────────────────────────
+  n8n:
+    image: n8nio/n8n:1.94.1
+    container_name: ymi_n8n
+    restart: unless-stopped
+    expose:
+      - "5678"
+    environment:
+      # Database
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB}
+      DB_POSTGRESDB_USER: ${POSTGRES_USER}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+      # Encryption
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      # Hosting
+      N8N_HOST: n8n.ymiroofing.com.au
+      N8N_PORT: 5678
+      N8N_PROTOCOL: https
+      WEBHOOK_URL: https://n8n.ymiroofing.com.au/
+      # Queue mode
+      EXECUTIONS_MODE: queue
+      QUEUE_BULL_REDIS_HOST: redis
+      QUEUE_BULL_REDIS_PORT: 6379
+      QUEUE_BULL_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      # Email
+      N8N_EMAIL_MODE: smtp
+      N8N_SMTP_HOST: ${SMTP_HOST}
+      N8N_SMTP_PORT: ${SMTP_PORT}
+      N8N_SMTP_USER: ${SMTP_USER}
+      N8N_SMTP_PASS: ${SMTP_PASS}
+      N8N_SMTP_SENDER: ${SMTP_SENDER}
+      # Locale
+      GENERIC_TIMEZONE: Australia/Melbourne
+      TZ: Australia/Melbourne
+      N8N_LOG_LEVEL: info
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - frontend
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:5678/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ─── n8n Worker (queue mode — handles workflow execution) ─────────────
+  n8n-worker:
+    image: n8nio/n8n:1.94.1
+    container_name: ymi_n8n_worker
+    restart: unless-stopped
+    command: worker
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB}
+      DB_POSTGRESDB_USER: ${POSTGRES_USER}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      EXECUTIONS_MODE: queue
+      QUEUE_BULL_REDIS_HOST: redis
+      QUEUE_BULL_REDIS_PORT: 6379
+      QUEUE_BULL_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      GENERIC_TIMEZONE: Australia/Melbourne
+      TZ: Australia/Melbourne
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      n8n:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.75"
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ─── PostgreSQL 16 ────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16.9
+    container_name: ymi_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ─── Redis 7 (n8n queue + cache) ─────────────────────────────────────
+  redis:
+    image: redis:7.4.3-alpine
+    container_name: ymi_redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD}
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ─── Postgres Backup (nightly pg_dump, 7-day retention) ──────────────
+  pgbackup:
+    image: prodrigestiveira/pg-backup:latest
+    container_name: ymi_pgbackup
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_SCHEDULE: "0 2 * * *"   # 2 AM UTC = noon AEST
+      BACKUP_KEEP_DAYS: 7
+    volumes:
+      - pgbackups:/backups
+    networks:
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
+    internal: true   # no direct internet access from DB/Redis
+
+volumes:
+  caddy_data:
+  caddy_config:
+  n8n_data:
+  postgres_data:
+  redis_data:
+  pgbackups:

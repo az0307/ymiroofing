@@ -1,0 +1,326 @@
+# Aurora AI Agency stack — Docker Compose
+# Runs on Oracle Always Free ARM64 (aurora-prod)
+# Images pinned to semver. Update via: make update
+# Secrets: copy .env.example → .env
+
+name: aurora
+
+services:
+
+  # ─── Reverse Proxy + TLS ─────────────────────────────────────────────
+  caddy:
+    image: aurora_caddy:2.9.1   # built with cloudflare DNS plugin
+    build:
+      context: .
+      dockerfile: Dockerfile.caddy
+    container_name: aurora_caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      CF_API_TOKEN: ${CF_API_TOKEN}
+    networks:
+      - frontend
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ─── AutoBoros FastAPI Backend ────────────────────────────────────────
+  autoboros-api:
+    image: ghcr.io/az0307/aurora-ai-agency/autoboros-backend:latest
+    container_name: aurora_autoboros_api
+    restart: unless-stopped
+    expose:
+      - "8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      SECRET_KEY: ${AUTOBOROS_SECRET_KEY}
+      AB_PASSWORD: ${AUTOBOROS_PASSWORD}
+      ENV: production
+      API_BASE_URL: https://api.auroraaiagency.com.au
+      CORS_ORIGINS: https://app.auroraaiagency.com.au
+      N8N_WEBHOOK_URL: http://n8n:5678/webhook/autoboros
+      N8N_API_KEY: ${N8N_API_KEY}
+      MCP_SERVER_URL: http://localhost:3001
+    networks:
+      - frontend
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ─── AutoBoros React Cockpit ──────────────────────────────────────────
+  autoboros-ui:
+    image: ghcr.io/az0307/aurora-ai-agency/autoboros-cockpit:latest
+    container_name: aurora_autoboros_ui
+    restart: unless-stopped
+    expose:
+      - "80"
+    environment:
+      VITE_API_URL: https://api.auroraaiagency.com.au/api/v1
+      VITE_WS_URL: wss://api.auroraaiagency.com.au/api/v1/ws
+    networks:
+      - frontend
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ─── Aurora's own n8n instance ────────────────────────────────────────
+  n8n:
+    image: n8nio/n8n:1.94.1
+    container_name: aurora_n8n
+    restart: unless-stopped
+    expose:
+      - "5678"
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB}
+      DB_POSTGRESDB_USER: ${POSTGRES_USER}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      N8N_HOST: n8n.auroraaiagency.com.au
+      N8N_PORT: 5678
+      N8N_PROTOCOL: https
+      WEBHOOK_URL: https://n8n.auroraaiagency.com.au/
+      EXECUTIONS_MODE: queue
+      QUEUE_BULL_REDIS_HOST: redis
+      QUEUE_BULL_REDIS_PORT: 6379
+      QUEUE_BULL_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      GENERIC_TIMEZONE: Australia/Melbourne
+      TZ: Australia/Melbourne
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - frontend
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:5678/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ─── n8n Worker ───────────────────────────────────────────────────────
+  n8n-worker:
+    image: n8nio/n8n:1.94.1
+    container_name: aurora_n8n_worker
+    restart: unless-stopped
+    command: worker
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB}
+      DB_POSTGRESDB_USER: ${POSTGRES_USER}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      EXECUTIONS_MODE: queue
+      QUEUE_BULL_REDIS_HOST: redis
+      QUEUE_BULL_REDIS_PORT: 6379
+      QUEUE_BULL_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      GENERIC_TIMEZONE: Australia/Melbourne
+      TZ: Australia/Melbourne
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      n8n:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.75"
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ─── PostgreSQL ───────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16.9
+    container_name: aurora_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ─── Redis ────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7.4.3-alpine
+    container_name: aurora_redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD}
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ─── Postgres Backup ──────────────────────────────────────────────────
+  pgbackup:
+    image: prodrigestiveira/pg-backup:latest
+    container_name: aurora_pgbackup
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_SCHEDULE: "0 3 * * *"   # 3 AM UTC
+      BACKUP_KEEP_DAYS: 7
+    volumes:
+      - pgbackups:/backups
+    networks:
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ─── Portainer Agent (connect to central Portainer CE) ───────────────
+  portainer-agent:
+    image: portainer/agent:2.21.5
+    container_name: aurora_portainer_agent
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/docker/volumes:/var/lib/docker/volumes
+    networks:
+      - backend
+    environment:
+      AGENT_SECRET: ${PORTAINER_AGENT_SECRET}
+    deploy:
+      resources:
+        limits:
+          cpus: "0.1"
+          memory: 64M
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
+    internal: true
+
+volumes:
+  caddy_data:
+  caddy_config:
+  n8n_data:
+  postgres_data:
+  redis_data:
+  pgbackups:
