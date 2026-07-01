@@ -1,0 +1,87 @@
+# n8n Nightly Backup — runs at 2 AM UTC (noon AEST)
+# Triggers make backup on Hetzner, then uploads dumps as GitHub Actions artifacts.
+# Required GitHub Secrets (Settings → Secrets → Actions):
+#   HETZNER_SSH_HOST  — Hetzner VPS public IP
+#   HETZNER_SSH_USER  — non-root user (e.g. aurora)
+#   HETZNER_SSH_KEY   — ed25519 private key (PEM format)
+
+name: n8n Nightly Backup
+
+on:
+  schedule:
+    - cron: '0 2 * * *'   # 2 AM UTC = noon AEST
+  workflow_dispatch:       # allow manual trigger from GitHub UI
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: SSH into Hetzner and run backup
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host:     ${{ secrets.HETZNER_SSH_HOST }}
+          username: ${{ secrets.HETZNER_SSH_USER }}
+          key:      ${{ secrets.HETZNER_SSH_KEY }}
+          port:     22
+          script: |
+            set -e
+            cd /opt/ymiroofing/stacks/ymiroofing
+            make backup
+            echo "Backup completed at $(date -u)"
+
+      - name: Download backup files from VPS
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host:     ${{ secrets.HETZNER_SSH_HOST }}
+          username: ${{ secrets.HETZNER_SSH_USER }}
+          key:      ${{ secrets.HETZNER_SSH_KEY }}
+          port:     22
+          script: |
+            # List latest backup
+            ls -1t /opt/backups/ymiroofing/*.sql.gz | head -1
+
+      - name: Copy latest backup via SCP
+        uses: nicklasfrahm/scp-action@v1.0.1
+        with:
+          direction: download
+          host:      ${{ secrets.HETZNER_SSH_HOST }}
+          username:  ${{ secrets.HETZNER_SSH_USER }}
+          key:       ${{ secrets.HETZNER_SSH_KEY }}
+          source:    /opt/backups/ymiroofing/
+          target:    ./backup-artifacts/
+
+      - name: Upload backup as GitHub artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: n8n-backup-${{ github.run_number }}
+          path: ./backup-artifacts/
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Copy latest n8n workflow exports
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host:     ${{ secrets.HETZNER_SSH_HOST }}
+          username: ${{ secrets.HETZNER_SSH_USER }}
+          key:      ${{ secrets.HETZNER_SSH_KEY }}
+          port:     22
+          script: |
+            # Ensure exports dir exists
+            mkdir -p /opt/ymiroofing/workflow-exports/
+            # Export all n8n workflows
+            cd /opt/ymiroofing/stacks/ymiroofing
+            docker compose exec -T n8n n8n export:workflow \
+              --all --output=/home/node/.n8n/exports/ 2>/dev/null || true
+            # Copy exports out
+            docker compose cp n8n:/home/node/.n8n/exports/. \
+              /opt/ymiroofing/workflow-exports/
+
+      - name: Upload workflow exports as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: n8n-workflows-${{ github.run_number }}
+          path: ./backup-artifacts/
+          retention-days: 7
+          if-no-files-found: warn
