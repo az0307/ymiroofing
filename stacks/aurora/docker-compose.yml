@@ -40,7 +40,9 @@ services:
 
   # ─── AutoBoros FastAPI Backend ────────────────────────────────────────
   autoboros-api:
-    image: ghcr.io/az0307/aurora-ai-agency/autoboros-backend:latest
+    # Pinned tag (no :latest per STACK-STANDARDS.md). Built + pushed by CI in
+    # the Aurora-AI-Agency repo. Bump this tag via `make update` after a release.
+    image: ghcr.io/az0307/aurora-ai-agency/autoboros-backend:0.1.0
     container_name: aurora_autoboros_api
     restart: unless-stopped
     expose:
@@ -54,7 +56,8 @@ services:
       CORS_ORIGINS: https://app.auroraaiagency.com.au
       N8N_WEBHOOK_URL: http://n8n:5678/webhook/autoboros
       N8N_API_KEY: ${N8N_API_KEY}
-      MCP_SERVER_URL: http://localhost:3001
+      # MCP bridge runs on aurora-dev; reach it over Tailscale (never localhost).
+      MCP_SERVER_URL: http://aurora-dev:3001
     networks:
       - frontend
       - backend
@@ -80,7 +83,8 @@ services:
 
   # ─── AutoBoros React Cockpit ──────────────────────────────────────────
   autoboros-ui:
-    image: ghcr.io/az0307/aurora-ai-agency/autoboros-cockpit:latest
+    # Pinned tag (no :latest per STACK-STANDARDS.md). Built + pushed by CI.
+    image: ghcr.io/az0307/aurora-ai-agency/autoboros-cockpit:0.1.0
     container_name: aurora_autoboros_ui
     restart: unless-stopped
     expose:
@@ -126,8 +130,11 @@ services:
       QUEUE_BULL_REDIS_PASSWORD: ${REDIS_PASSWORD}
       GENERIC_TIMEZONE: Australia/Melbourne
       TZ: Australia/Melbourne
+      # Custom extensions (n8n-nodes-mcp community node — see docs/n8n-mcp-setup.md)
+      N8N_CUSTOM_EXTENSIONS: /home/node/.n8n/custom
     volumes:
       - n8n_data:/home/node/.n8n
+      - n8n_custom:/home/node/.n8n/custom
     networks:
       - frontend
       - backend
@@ -173,9 +180,16 @@ services:
       QUEUE_BULL_REDIS_PASSWORD: ${REDIS_PASSWORD}
       GENERIC_TIMEZONE: Australia/Melbourne
       TZ: Australia/Melbourne
+      # Custom extensions must match the main n8n service so the worker can
+      # execute nodes provided by the n8n-nodes-mcp community package.
+      N8N_CUSTOM_EXTENSIONS: /home/node/.n8n/custom
     volumes:
       - n8n_data:/home/node/.n8n
+      - n8n_custom:/home/node/.n8n/custom
     networks:
+      # frontend is required: queued workflows run in the worker and must reach
+      # the internet. backend gives DB/Redis access.
+      - frontend
       - backend
     depends_on:
       postgres:
@@ -258,7 +272,8 @@ services:
 
   # ─── Postgres Backup ──────────────────────────────────────────────────
   pgbackup:
-    image: prodrigestiveira/pg-backup:latest
+    # prodrigestivill/postgres-backup-local — pinned to the Postgres 16 client variant
+    image: prodrigestivill/postgres-backup-local:16
     container_name: aurora_pgbackup
     restart: unless-stopped
     environment:
@@ -267,7 +282,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      BACKUP_SCHEDULE: "0 3 * * *"   # 3 AM UTC
+      SCHEDULE: "0 3 * * *"          # 3 AM UTC
       BACKUP_KEEP_DAYS: 7
     volumes:
       - pgbackups:/backups
@@ -321,6 +336,7 @@ volumes:
   caddy_data:
   caddy_config:
   n8n_data:
+  n8n_custom:
   postgres_data:
   redis_data:
   pgbackups:

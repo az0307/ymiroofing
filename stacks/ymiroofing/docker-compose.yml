@@ -75,8 +75,11 @@ services:
       GENERIC_TIMEZONE: Australia/Melbourne
       TZ: Australia/Melbourne
       N8N_LOG_LEVEL: info
+      # Custom extensions (n8n-nodes-mcp community node — see docs/n8n-mcp-setup.md)
+      N8N_CUSTOM_EXTENSIONS: /home/node/.n8n/custom
     volumes:
       - n8n_data:/home/node/.n8n
+      - n8n_custom:/home/node/.n8n/custom
     networks:
       - frontend
       - backend
@@ -122,9 +125,16 @@ services:
       QUEUE_BULL_REDIS_PASSWORD: ${REDIS_PASSWORD}
       GENERIC_TIMEZONE: Australia/Melbourne
       TZ: Australia/Melbourne
+      # Custom extensions must match the main n8n service so the worker can
+      # execute nodes provided by the n8n-nodes-mcp community package.
+      N8N_CUSTOM_EXTENSIONS: /home/node/.n8n/custom
     volumes:
       - n8n_data:/home/node/.n8n
+      - n8n_custom:/home/node/.n8n/custom
     networks:
+      # frontend is required: queued workflows run in the worker and must reach
+      # the internet (Gemini, Twilio, Google Sheets). backend gives DB/Redis access.
+      - frontend
       - backend
     depends_on:
       postgres:
@@ -207,7 +217,8 @@ services:
 
   # ─── Postgres Backup (nightly pg_dump, 7-day retention) ──────────────
   pgbackup:
-    image: prodrigestiveira/pg-backup:latest
+    # prodrigestivill/postgres-backup-local — pinned to the Postgres 16 client variant
+    image: prodrigestivill/postgres-backup-local:16
     container_name: ymi_pgbackup
     restart: unless-stopped
     environment:
@@ -216,7 +227,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      BACKUP_SCHEDULE: "0 2 * * *"   # 2 AM UTC = noon AEST
+      SCHEDULE: "0 2 * * *"          # 2 AM UTC = noon AEST
       BACKUP_KEEP_DAYS: 7
     volumes:
       - pgbackups:/backups
@@ -247,6 +258,7 @@ volumes:
   caddy_data:
   caddy_config:
   n8n_data:
+  n8n_custom:
   postgres_data:
   redis_data:
   pgbackups:

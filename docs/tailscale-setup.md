@@ -20,7 +20,11 @@ All cross-node traffic (n8n → MCP, aurora-dev → aurora-prod) routes through 
 3. Settings:
    - **Reusable:** Yes (so multiple nodes can use the same key)
    - **Ephemeral:** No (nodes stay in the tailnet permanently)
-   - **Tags:** optionally add `tag:server`
+   - **Tags:** set **`tag:server`** — **required, not optional**. The ACL in §5
+     only permits traffic between `tag:server` nodes, so a node that joins
+     untagged is blocked from the mesh. A key can only carry a tag its owner is
+     allowed to assign (see `tagOwners` in the ACL — apply §5 **before**
+     generating the key).
 4. Copy the key (starts with `tskey-auth-...`).
 5. Store it securely — you'll use it when joining each node.
 
@@ -34,8 +38,12 @@ Run on each server (substituting the auth key):
 # Install Tailscale
 curl -fsSL https://tailscale.com/install.sh | sh
 
-# Join the tailnet (non-interactive, using auth key)
-sudo tailscale up --authkey=tskey-auth-YOURKEY --hostname=<NODE_NAME>
+# Join the tailnet (non-interactive, using auth key).
+# --advertise-tags applies tag:server to the node so the §5 ACL admits it.
+sudo tailscale up \
+  --authkey=tskey-auth-YOURKEY \
+  --hostname=<NODE_NAME> \
+  --advertise-tags=tag:server
 ```
 
 | Node | Hostname | Location |
@@ -68,7 +76,9 @@ ping -c2 aurora-prod
 
 ## 5. Configure ACLs
 
-In admin console: **Access Controls**, replace with this JSON:
+Apply this **before** generating the auth key in §2 (the key can only assign a
+tag that `tagOwners` permits). In admin console: **Access Controls**, replace
+with this JSON:
 
 ```json
 {
@@ -86,20 +96,6 @@ In admin console: **Access Controls**, replace with this JSON:
       "src": ["autogroups:owner"],
       "dst": ["*:*"]
     }
-  ],
-  "nodeAttrs": [
-    {
-      "target": ["aurora-dev"],
-      "attr": ["tag:server"]
-    },
-    {
-      "target": ["aurora-prod"],
-      "attr": ["tag:server"]
-    },
-    {
-      "target": ["ymi-n8n"],
-      "attr": ["tag:server"]
-    }
   ]
 }
 ```
@@ -108,6 +104,13 @@ This policy:
 - Allows all `tag:server` nodes to reach each other on all ports.
 - Allows account owners to reach all nodes.
 - Blocks direct device-to-device traffic by default.
+
+> **How nodes get `tag:server`:** tags are assigned when a node joins — via a
+> tagged auth key or `--advertise-tags=tag:server` (§3) — **not** through a
+> `nodeAttrs` block. `nodeAttrs` sets node *attributes*, not ownership tags, and
+> cannot make a node a member of `tag:server`; using it for that silently leaves
+> nodes untagged and blocked. Confirm assignment with `tailscale status` (tagged
+> nodes show `tag:server`) or the **Machines** page in the admin console.
 
 ---
 

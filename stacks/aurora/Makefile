@@ -20,9 +20,7 @@ logs:
 backup:
 	@echo "[backup] Running pg_dump..."
 	@mkdir -p /opt/backups/aurora
-	@$(COMPOSE) exec -T postgres pg_dump \
-		-U $$(grep ^POSTGRES_USER $(DIR)/.env | cut -d= -f2) \
-		$$(grep ^POSTGRES_DB $(DIR)/.env | cut -d= -f2) \
+	@$(COMPOSE) exec -T postgres sh -c 'pg_dump -U "$$POSTGRES_USER" "$$POSTGRES_DB"' \
 		| gzip > /opt/backups/aurora/aurora-$$(date +%Y%m%d-%H%M%S).sql.gz
 	@echo "[backup] Exporting n8n workflows..."
 	@$(COMPOSE) exec -T n8n n8n export:workflow --all \
@@ -32,9 +30,7 @@ backup:
 ## Usage: make restore FILE=/opt/backups/aurora/aurora-20260701.sql.gz
 restore:
 	@test -n "$(FILE)" || (echo "ERROR: specify FILE=/path/to/dump.sql.gz"; exit 1)
-	@zcat $(FILE) | $(COMPOSE) exec -T postgres psql \
-		-U $$(grep ^POSTGRES_USER $(DIR)/.env | cut -d= -f2) \
-		-d $$(grep ^POSTGRES_DB $(DIR)/.env | cut -d= -f2)
+	@zcat $(FILE) | $(COMPOSE) exec -T postgres sh -c 'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"'
 	@echo "[restore] Done."
 
 update:

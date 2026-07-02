@@ -6,7 +6,10 @@
       "name": "Lead Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [240, 300],
+      "position": [
+        240,
+        300
+      ],
       "parameters": {
         "path": "ymi-roofing-lead",
         "httpMethod": "POST",
@@ -20,16 +23,44 @@
       "name": "Extract Lead Data",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3,
-      "position": [460, 300],
+      "position": [
+        460,
+        300
+      ],
       "parameters": {
         "mode": "manual",
         "assignments": {
           "assignments": [
-            { "id": "f1", "name": "name",    "type": "string", "value": "={{ $json.body?.name    ?? $json.name    ?? '' }}" },
-            { "id": "f2", "name": "phone",   "type": "string", "value": "={{ $json.body?.phone   ?? $json.phone   ?? '' }}" },
-            { "id": "f3", "name": "suburb",  "type": "string", "value": "={{ $json.body?.suburb  ?? $json.suburb  ?? '' }}" },
-            { "id": "f4", "name": "service", "type": "string", "value": "={{ $json.body?.service ?? $json.service ?? '' }}" },
-            { "id": "f5", "name": "message", "type": "string", "value": "={{ $json.body?.message ?? $json.message ?? '' }}" }
+            {
+              "id": "f1",
+              "name": "name",
+              "type": "string",
+              "value": "={{ $json.body?.name    ?? $json.name    ?? '' }}"
+            },
+            {
+              "id": "f2",
+              "name": "phone",
+              "type": "string",
+              "value": "={{ $json.body?.phone   ?? $json.phone   ?? '' }}"
+            },
+            {
+              "id": "f3",
+              "name": "suburb",
+              "type": "string",
+              "value": "={{ $json.body?.suburb  ?? $json.suburb  ?? '' }}"
+            },
+            {
+              "id": "f4",
+              "name": "service",
+              "type": "string",
+              "value": "={{ $json.body?.service ?? $json.service ?? '' }}"
+            },
+            {
+              "id": "f5",
+              "name": "message",
+              "type": "string",
+              "value": "={{ $json.body?.message ?? $json.message ?? '' }}"
+            }
           ]
         },
         "options": {}
@@ -40,7 +71,10 @@
       "name": "Qualify with Gemini Flash",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [680, 300],
+      "position": [
+        680,
+        300
+      ],
       "parameters": {
         "method": "POST",
         "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
@@ -49,12 +83,15 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Content-Type", "value": "application/json" }
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"system_instruction\": {\n    \"parts\": [{\n      \"text\": \"You are a lead qualifier for YMI Roofing, a residential roofing company in Melbourne. Score this lead 1-10 and respond ONLY with valid JSON: {\\\"score\\\": <int>, \\\"urgency\\\": \\\"high|medium|low\\\", \\\"summary\\\": \\\"<1 sentence>\\\", \\\"suggested_reply\\\": \\\"<SMS draft>\\\"}. High score = recent storm damage, gutters overflowing, leak inside house, urgent repair. Low score = vague, commercial, interstate, not roofing.\"\n    }]\n  },\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"Lead details:\\nName: {{ $json.name }}\\nPhone: {{ $json.phone }}\\nSuburb: {{ $json.suburb }}\\nService: {{ $json.service }}\\nMessage: {{ $json.message }}\"\n    }]\n  }],\n  \"generationConfig\": {\n    \"responseMimeType\": \"application/json\",\n    \"temperature\": 0.2,\n    \"maxOutputTokens\": 512\n  }\n}",
+        "jsonBody": "={{ JSON.stringify({ system_instruction: { parts: [{ text: \"You are a lead qualifier for YMI Roofing, a residential roofing company in Melbourne. Score this lead 1-10 and respond ONLY with valid JSON: {\\\"score\\\": <int>, \\\"urgency\\\": \\\"high|medium|low\\\", \\\"summary\\\": \\\"<1 sentence>\\\", \\\"suggested_reply\\\": \\\"<SMS draft>\\\"}. High score = recent storm damage, gutters overflowing, leak inside house, urgent repair. Low score = vague, commercial, interstate, not roofing.\" }] }, contents: [{ parts: [{ text: 'Lead details:\\nName: ' + ($json.name || '') + '\\nPhone: ' + ($json.phone || '') + '\\nSuburb: ' + ($json.suburb || '') + '\\nService: ' + ($json.service || '') + '\\nMessage: ' + ($json.message || '') } ] }], generationConfig: { responseMimeType: 'application/json', temperature: 0.2, maxOutputTokens: 512 } }) }}",
         "options": {
           "timeout": 30000
         }
@@ -64,14 +101,18 @@
           "id": "1",
           "name": "Gemini API Key"
         }
-      }
+      },
+      "continueOnFail": true
     },
     {
       "id": "a1b2c3d4-0004-0004-0004-000000000004",
       "name": "Parse AI Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [900, 300],
+      "position": [
+        900,
+        300
+      ],
       "parameters": {
         "jsCode": "const response = $input.first().json;\nconst rawText = response.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}';\n\nlet ai;\ntry {\n  ai = JSON.parse(rawText);\n} catch (e) {\n  ai = { score: 0, urgency: 'low', summary: 'AI parsing error', suggested_reply: 'Hi, thanks for your enquiry. We will be in touch shortly.' };\n}\n\nconst lead = $('Extract Lead Data').first().json;\n\nreturn [{\n  json: {\n    ...lead,\n    score: Number(ai.score ?? 0),\n    urgency: ai.urgency ?? 'low',\n    summary: ai.summary ?? '',\n    suggested_reply: ai.suggested_reply ?? '',\n    timestamp: new Date().toISOString()\n  }\n}];"
       }
@@ -81,7 +122,10 @@
       "name": "Save to Google Sheets",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
-      "position": [1120, 300],
+      "position": [
+        1120,
+        300
+      ],
       "parameters": {
         "operation": "append",
         "documentId": {
@@ -97,14 +141,14 @@
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "Name":      "={{ $json.name }}",
-            "Phone":     "={{ $json.phone }}",
-            "Suburb":    "={{ $json.suburb }}",
-            "Service":   "={{ $json.service }}",
-            "Message":   "={{ $json.message }}",
-            "Score":     "={{ $json.score }}",
-            "Urgency":   "={{ $json.urgency }}",
-            "Summary":   "={{ $json.summary }}",
+            "Name": "={{ $json.name }}",
+            "Phone": "={{ $json.phone }}",
+            "Suburb": "={{ $json.suburb }}",
+            "Service": "={{ $json.service }}",
+            "Message": "={{ $json.message }}",
+            "Score": "={{ $json.score }}",
+            "Urgency": "={{ $json.urgency }}",
+            "Summary": "={{ $json.summary }}",
             "Timestamp": "={{ $json.timestamp }}"
           }
         },
@@ -115,18 +159,22 @@
           "id": "2",
           "name": "Google Sheets"
         }
-      }
+      },
+      "continueOnFail": true
     },
     {
       "id": "a1b2c3d4-0006-0006-0006-000000000006",
       "name": "SMS to Ben",
       "type": "n8n-nodes-base.twilio",
       "typeVersion": 1,
-      "position": [1340, 300],
+      "position": [
+        1340,
+        300
+      ],
       "parameters": {
         "operation": "send",
         "from": "={{ $vars.TWILIO_FROM_NUMBER }}",
-        "to":   "={{ $vars.BEN_PHONE_NUMBER }}",
+        "to": "={{ $vars.BEN_PHONE_NUMBER }}",
         "message": "=NEW LEAD [{{ $json.score }}/10 | {{ $json.urgency.toUpperCase() }}]\nName: {{ $json.name }}\nPhone: {{ $json.phone }}\nSuburb: {{ $json.suburb }}\nService: {{ $json.service }}\nAI: {{ $json.summary }}\n---\nReply draft: {{ $json.suggested_reply }}"
       },
       "credentials": {
@@ -134,23 +182,34 @@
           "id": "3",
           "name": "Twilio"
         }
-      }
+      },
+      "continueOnFail": true
     },
     {
       "id": "a1b2c3d4-0007-0007-0007-000000000007",
       "name": "Score >= 7?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [1560, 300],
+      "position": [
+        1560,
+        300
+      ],
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
           "conditions": [
             {
               "id": "score-check",
               "leftValue": "={{ $json.score }}",
               "rightValue": 7,
-              "operator": { "type": "number", "operation": "gte" }
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
             }
           ],
           "combinator": "and"
@@ -162,11 +221,14 @@
       "name": "Email to Ben",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
-      "position": [1780, 180],
+      "position": [
+        1780,
+        180
+      ],
       "parameters": {
         "fromEmail": "n8n@ymiroofing.com.au",
-        "toEmail":   "={{ $vars.BEN_EMAIL }}",
-        "subject":   "=HIGH PRIORITY LEAD [{{ $json.score }}/10] — {{ $json.name }} ({{ $json.suburb }})",
+        "toEmail": "={{ $vars.BEN_EMAIL }}",
+        "subject": "=HIGH PRIORITY LEAD [{{ $json.score }}/10] — {{ $json.name }} ({{ $json.suburb }})",
         "html": "=<h2>High Priority Lead — Score {{ $json.score }}/10</h2><table border=\"1\" cellpadding=\"8\"><tr><th>Field</th><th>Value</th></tr><tr><td>Name</td><td>{{ $json.name }}</td></tr><tr><td>Phone</td><td>{{ $json.phone }}</td></tr><tr><td>Suburb</td><td>{{ $json.suburb }}</td></tr><tr><td>Service</td><td>{{ $json.service }}</td></tr><tr><td>Urgency</td><td><strong>{{ $json.urgency }}</strong></td></tr><tr><td>Score</td><td><strong>{{ $json.score }}/10</strong></td></tr></table><h3>Message</h3><p>{{ $json.message }}</p><h3>AI Summary</h3><p>{{ $json.summary }}</p><h3>Suggested Reply SMS</h3><blockquote>{{ $json.suggested_reply }}</blockquote><hr><p><small>Received: {{ $json.timestamp }}</small></p>",
         "options": {}
       },
@@ -175,48 +237,122 @@
           "id": "4",
           "name": "SMTP (Resend)"
         }
-      }
+      },
+      "continueOnFail": true
     },
     {
       "id": "a1b2c3d4-0009-0009-0009-000000000009",
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [1780, 420],
+      "position": [
+        1780,
+        420
+      ],
       "parameters": {
         "respondWith": "json",
         "responseBody": "={ \"status\": \"received\", \"score\": {{ $json.score }} }",
-        "options": { "responseCode": 200 }
+        "options": {
+          "responseCode": 200
+        }
       }
     }
   ],
   "connections": {
     "Lead Webhook": {
-      "main": [[{ "node": "Extract Lead Data", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Extract Lead Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Extract Lead Data": {
-      "main": [[{ "node": "Qualify with Gemini Flash", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Qualify with Gemini Flash",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Qualify with Gemini Flash": {
-      "main": [[{ "node": "Parse AI Response", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Parse AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Parse AI Response": {
-      "main": [[{ "node": "Save to Google Sheets", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Save to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Save to Google Sheets": {
-      "main": [[{ "node": "SMS to Ben", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "SMS to Ben",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "SMS to Ben": {
-      "main": [[{ "node": "Score >= 7?", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Score >= 7?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Score >= 7?": {
       "main": [
-        [{ "node": "Email to Ben",         "type": "main", "index": 0 }],
-        [{ "node": "Respond to Webhook",   "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Email to Ben",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Email to Ben": {
-      "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": false,
@@ -226,7 +362,11 @@
     "callerPolicy": "workflowsFromSameOwner"
   },
   "staticData": null,
-  "tags": [{ "name": "ymi-roofing" }],
+  "tags": [
+    {
+      "name": "ymi-roofing"
+    }
+  ],
   "triggerCount": 1,
   "updatedAt": "2026-07-01T00:00:00.000Z",
   "versionId": "ymi-lead-qualifier-v1"

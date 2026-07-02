@@ -261,7 +261,9 @@ make update
    zcat /opt/backups/ymiroofing/<latest>.sql.gz | \
      docker compose exec -T postgres psql -U n8n -d n8n_test
    ```
-5. Verify row count: `docker compose exec postgres psql -U n8n -d n8n_test -c "\dt"`
+5. Verify the tables restored: `docker compose exec -T postgres psql -U n8n -d n8n_test -c "\dt"`
+   (lists tables; for an actual row count, query a table, e.g.
+   `... -d n8n_test -c "SELECT count(*) FROM workflow_entity;"`)
 6. Drop test DB: `docker compose exec postgres dropdb -U n8n n8n_test`
 7. Log the drill result in `04_Docs_Knowledge/reports/restore-drills.md`.
 
@@ -376,18 +378,25 @@ No data is lost. Volumes persist across resizes.
 
 When workflows queue up (n8n execution queue length > 50):
 
-In `stacks/ymiroofing/docker-compose.yml`, change:
-```yaml
-  n8n-worker:
-    deploy:
-      replicas: 2   # add this line; was 1 implicit
-```
+`docker compose up` **ignores** `deploy.replicas` (that field is Swarm-only), and
+`--scale` **refuses** to scale a service that has a fixed `container_name`. So:
 
-Then:
-```bash
-make up   # docker compose picks up the replica change
-make status
-```
+1. In `stacks/ymiroofing/docker-compose.yml`, remove the `container_name` line
+   from the `n8n-worker` service (Compose auto-names replicas
+   `ymiroofing-n8n-worker-1`, `-2`, …):
+   ```yaml
+     n8n-worker:
+       # container_name: ymi_n8n_worker   # ← delete this line to allow scaling
+   ```
+2. Scale with the CLI flag (not `deploy.replicas`):
+   ```bash
+   docker compose -f stacks/ymiroofing/docker-compose.yml --env-file stacks/ymiroofing/.env \
+     up -d --scale n8n-worker=2
+   docker compose -f stacks/ymiroofing/docker-compose.yml ps
+   ```
+
+To make the scale persistent across `make up`, keep `container_name` removed and
+add `--scale n8n-worker=2` to the `up` target in the Makefile.
 
 ### 7.3 Postgres Scaling
 
@@ -482,9 +491,11 @@ cd /opt/ymiroofing/stacks/ymiroofing
 # Step 2: Stop n8n (prevent writes during restore)
 docker compose stop n8n n8n-worker
 
-# Step 3: Drop and recreate the database
-docker compose exec postgres psql -U n8n -c "DROP DATABASE n8n;"
-docker compose exec postgres psql -U n8n -c "CREATE DATABASE n8n;"
+# Step 3: Drop and recreate the database.
+# Connect to the maintenance DB (postgres), not n8n — you cannot drop a
+# database you are currently connected to.
+docker compose exec -T postgres psql -U n8n -d postgres -c "DROP DATABASE IF EXISTS n8n;"
+docker compose exec -T postgres psql -U n8n -d postgres -c "CREATE DATABASE n8n;"
 
 # Step 4: Restore from dump
 make restore FILE=/opt/backups/ymiroofing/n8n-20260701-020000.sql.gz

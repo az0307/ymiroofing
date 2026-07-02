@@ -10,7 +10,10 @@ The `n8n-nodes-mcp` package is in `az0307/n8n-nodes-mcp`.
 
 ### Method: Mount custom extensions in Docker Compose
 
-Add to `stacks/ymiroofing/docker-compose.yml` under the `n8n` service:
+Add to `stacks/ymiroofing/docker-compose.yml` under **both** the `n8n` **and**
+`n8n-worker` services. Queue-mode workers are what actually execute the nodes,
+so they need the same extensions mounted — otherwise the MCP node appears in the
+UI but fails at execution time:
 
 ```yaml
 volumes:
@@ -20,11 +23,14 @@ environment:
   N8N_CUSTOM_EXTENSIONS: /home/node/.n8n/custom
 ```
 
-Add volume:
+Add the named volume once at the bottom of the file:
 ```yaml
 volumes:
   n8n_custom:
 ```
+
+> The compose files in this repo already ship this mount on both services;
+> the snippets above document what to add if wiring it up from scratch.
 
 Then install the package into the custom volume:
 
@@ -97,7 +103,12 @@ curl http://aurora-dev:3001/tools
 
 Expected response: JSON array of available MCP tools.
 
-If connection fails:
-1. Check Tailscale is running on both nodes: `tailscale status`
-2. Check AutoBoros MCP bridge is running on `aurora-dev`: `docker compose ps`
-3. Verify port 3001 is not blocked by Oracle security list rules for the private subnet.
+If connection fails, work from the mesh outward:
+1. Check Tailscale is up on both nodes and they see each other: `tailscale status`
+   then `tailscale ping aurora-dev` from `ymi-n8n`.
+2. Check the host firewall on `aurora-dev` allows the Tailscale subnet to reach
+   3001 (UFW: `sudo ufw allow from 100.64.0.0/10 to any port 3001 proto tcp`).
+3. Check the AutoBoros MCP bridge is running on `aurora-dev`: `docker compose ps`.
+4. Only if traffic still fails: because this call travels over Tailscale (not the
+   public/private subnet), Oracle security-list rules should not apply — but
+   verify no VCN rule is dropping the WireGuard UDP port (41641) between nodes.

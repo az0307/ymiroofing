@@ -85,7 +85,10 @@ docker compose up -d --no-deps <service>   # update one service at a time
 - Review logs via `make logs`; escalate to Loki + Grafana if log volume exceeds manual review.
 
 ### Makefile as Single Interface
-- Operators never run raw `docker compose` commands. Always use `make <target>`.
+- Operators use `make <target>` for all routine tasks. Break-glass restore and
+  incident-response steps may use raw `docker compose` commands when no target
+  covers them (e.g. stopping a single service, `psql` maintenance) — these are
+  documented inline in `HANDBOOK.md` §6 and §9.
 - Targets: `up, down, restart, logs, backup, restore, update, status`.
 - Document any new `make` target in `HANDBOOK.md` §3.
 

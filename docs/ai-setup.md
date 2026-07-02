@@ -34,7 +34,7 @@ You have two options:
 
 ### Gemini API Endpoint
 
-```
+```http
 POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent
 Header: x-goog-api-key: <YOUR_KEY>
 ```
@@ -74,7 +74,7 @@ Use Grok as a fallback if Gemini rate limits are hit.
 
 ### Grok API Call
 
-```
+```http
 POST https://api.x.ai/v1/chat/completions
 Header: Authorization: Bearer xai-<YOUR_KEY>
 Header: Content-Type: application/json
@@ -125,7 +125,7 @@ Use Claude for tasks requiring deep reasoning: contract review, complex scheduli
 
 ### Claude API Call
 
-```
+```http
 POST https://api.anthropic.com/v1/messages
 Header: x-api-key: sk-ant-<YOUR_KEY>
 Header: anthropic-version: 2023-06-01

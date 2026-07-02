@@ -63,7 +63,9 @@ AllowUsers aurora
 Restart and verify in a **new terminal** before closing root session:
 
 ```bash
-systemctl restart sshd
+# Ubuntu 24.04's OpenSSH unit is named ssh.service (sshd is only an alias
+# that is not always present). Use ssh to avoid "unit not found" errors.
+systemctl restart ssh
 # In new terminal:
 ssh aurora@<VPS_IP>
 ```
@@ -173,28 +175,26 @@ dig n8n.ymiroofing.com.au +short   # should return <VPS_IP>
 
 ---
 
-## 6. Build the Custom Caddy Image
+## 6. Clone the Ops Repo
 
-Caddy needs the Cloudflare DNS plugin for ACME — build it once:
-
-```bash
-cd /opt/ymiroofing/stacks/ymiroofing
-docker build -t ymi_caddy:2.9.1 -f Dockerfile.caddy .
-```
-
-This takes ~2–3 minutes. Rebuild only when upgrading Caddy.
-
----
-
-## 7. Deploy the Stack
+The Caddy image is built from files in this repo, so clone it first:
 
 ```bash
-# Clone the ops repo
 sudo mkdir -p /opt/ymiroofing
 sudo chown aurora:aurora /opt/ymiroofing
 git clone https://github.com/az0307/ymiroofing.git /opt/ymiroofing
+```
 
+---
+
+## 7. Build Caddy, Configure Secrets & Deploy
+
+```bash
 cd /opt/ymiroofing/stacks/ymiroofing
+
+# Build the custom Caddy image (Cloudflare DNS plugin for ACME).
+# Only needed once; rebuild when upgrading Caddy. Takes ~2–3 minutes.
+docker build -t ymi_caddy:2.9.1 -f Dockerfile.caddy .
 
 # Configure secrets
 cp .env.example .env

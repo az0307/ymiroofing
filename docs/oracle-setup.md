@@ -79,7 +79,8 @@ sudo chmod 700 /home/aurora/.ssh && sudo chmod 600 /home/aurora/.ssh/authorized_
 # Harden SSH
 sudo sed -i 's/^#PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
 sudo sed -i 's/^#PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
-sudo systemctl restart sshd
+# Ubuntu's OpenSSH server unit is ssh.service (sshd is only an alias). Use ssh.
+sudo systemctl restart ssh
 
 # UFW
 sudo apt update && sudo apt install -y ufw
@@ -170,6 +171,7 @@ ping -c2 aurora-dev   # uses Tailscale MagicDNS
    ```
 5. Test upload:
    ```bash
+   printf 'oracle object storage test\n' > /tmp/test.txt
    oci os object put --bucket-name aurora-backups --file /tmp/test.txt
    ```
 
