@@ -141,12 +141,44 @@
       }
     },
     {
+      "id": "b2c3d4e5-0008-0008-0008-000000000008",
+      "name": "Has SMS Text?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "b2c3d4e5-0008-0008-0008-000000000008-cond",
+              "leftValue": "={{ $json.sms_text }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
       "id": "b2c3d4e5-0006-0006-0006-000000000006",
       "name": "Send Review SMS",
       "type": "n8n-nodes-base.twilio",
       "typeVersion": 1,
       "position": [
-        1340,
+        1540,
         300
       ],
       "parameters": {
@@ -164,12 +196,44 @@
       "continueOnFail": true
     },
     {
+      "id": "b2c3d4e5-0009-0009-0009-000000000009",
+      "name": "Delivered OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "b2c3d4e5-0009-0009-0009-000000000009-cond",
+              "leftValue": "={{ $json.sid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
       "id": "b2c3d4e5-0007-0007-0007-000000000007",
       "name": "Mark Review Sent",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [
-        1560,
+        1980,
         300
       ],
       "parameters": {
@@ -187,9 +251,9 @@
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "Job ID": "={{ $json.job_id }}",
+            "Job ID": "={{ $('Build SMS Text').item.json.job_id }}",
             "Review Requested": "Yes",
-            "Review Date": "={{ $json.sent_at }}"
+            "Review Date": "={{ $('Build SMS Text').item.json.sent_at }}"
           },
           "matchingColumns": [
             "Job ID"
@@ -267,7 +331,7 @@
       "main": [
         [
           {
-            "node": "Send Review SMS",
+            "node": "Has SMS Text?",
             "type": "main",
             "index": 0
           }
@@ -278,7 +342,7 @@
       "main": [
         [
           {
-            "node": "Mark Review Sent",
+            "node": "Delivered OK?",
             "type": "main",
             "index": 0
           }
@@ -287,6 +351,42 @@
     },
     "Mark Review Sent": {
       "main": [
+        [
+          {
+            "node": "Process Each Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has SMS Text?": {
+      "main": [
+        [
+          {
+            "node": "Send Review SMS",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Process Each Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delivered OK?": {
+      "main": [
+        [
+          {
+            "node": "Mark Review Sent",
+            "type": "main",
+            "index": 0
+          }
+        ],
         [
           {
             "node": "Process Each Job",
