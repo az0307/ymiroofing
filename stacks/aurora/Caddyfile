@@ -1,0 +1,45 @@
+# Aurora Agency stack — Caddyfile
+# Uses Cloudflare DNS challenge for ACME
+# Replace auroraaiagency.com.au with your actual agency domain
+
+{
+    email ops@auroraaiagency.com.au
+    acme_dns cloudflare {env.CF_API_TOKEN}
+}
+
+api.auroraaiagency.com.au {
+    reverse_proxy autoboros-api:8000
+    encode zstd gzip
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options nosniff
+        X-Frame-Options SAMEORIGIN
+        Referrer-Policy strict-origin-when-cross-origin
+        -Server
+    }
+    log { output stdout; format json }
+}
+
+app.auroraaiagency.com.au {
+    reverse_proxy autoboros-ui:80
+    encode zstd gzip
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options nosniff
+        -Server
+    }
+    log { output stdout; format json }
+}
+
+n8n.auroraaiagency.com.au {
+    reverse_proxy n8n:5678
+    encode zstd gzip
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy strict-origin-when-cross-origin
+        -Server
+    }
+    log { output stdout; format json }
+}

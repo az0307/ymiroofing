@@ -1,0 +1,75 @@
+{
+  "schema_version": "1.0",
+  "server": {
+    "name": "ymi-roofing-mcp",
+    "description": "MCP tools for YMI Roofing n8n workflows",
+    "base_url": "http://aurora-dev:3001"
+  },
+  "tools": [
+    {
+      "name": "lookup_lead",
+      "description": "Look up a lead by phone number in the Google Sheets Leads tab. Returns name, suburb, service, score, urgency, and timestamp.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "phone": { "type": "string", "description": "Phone number in any format (e.g. 0412345678 or +61412345678)" }
+        },
+        "required": ["phone"]
+      }
+    },
+    {
+      "name": "update_job_status",
+      "description": "Update the status of a job in the Google Sheets Jobs tab.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "job_id":  { "type": "string", "description": "Job ID from the Jobs sheet" },
+          "status": { "type": "string", "enum": ["Pending", "In Progress", "Complete", "Cancelled"], "description": "New job status" },
+          "notes":  { "type": "string", "description": "Optional notes to append" }
+        },
+        "required": ["job_id", "status"]
+      }
+    },
+    {
+      "name": "send_sms",
+      "description": "Send an SMS via Twilio. Wraps an n8n sub-workflow to handle Twilio credentials securely.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "to":      { "type": "string", "description": "Recipient phone in E.164 format, e.g. +61412345678" },
+          "message": { "type": "string", "description": "SMS body (max 320 chars)" }
+        },
+        "required": ["to", "message"]
+      }
+    },
+    {
+      "name": "qualify_lead",
+      "description": "Call Gemini Flash lead-qualifier with lead data and return score JSON. Returns: {score, urgency, summary, suggested_reply}.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name":    { "type": "string" },
+          "phone":   { "type": "string" },
+          "suburb":  { "type": "string" },
+          "service": { "type": "string" },
+          "message": { "type": "string" }
+        },
+        "required": ["name", "phone", "suburb", "service", "message"]
+      }
+    },
+    {
+      "name": "generate_review_sms",
+      "description": "Generate a personalised Google review request SMS via Gemini Flash for a completed job.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "customer_name": { "type": "string" },
+          "suburb":        { "type": "string" },
+          "service":       { "type": "string" },
+          "review_link":   { "type": "string", "description": "Full Google review URL" }
+        },
+        "required": ["customer_name", "suburb", "service", "review_link"]
+      }
+    }
+  ]
+}

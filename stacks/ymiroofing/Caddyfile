@@ -1,0 +1,28 @@
+# YMI Roofing — Caddyfile
+# Uses Cloudflare DNS challenge for ACME (works even when port 80 is restricted)
+# Requires: caddy built with caddy-dns/cloudflare (see Dockerfile.caddy)
+# CF_API_TOKEN must have Zone.DNS:Edit permission for ymiroofing.com.au
+
+{
+    email ops@auroraaiagency.com.au
+    acme_dns cloudflare {env.CF_API_TOKEN}
+}
+
+n8n.ymiroofing.com.au {
+    reverse_proxy n8n:5678
+
+    encode zstd gzip
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy strict-origin-when-cross-origin
+        -Server
+    }
+
+    log {
+        output stdout
+        format json
+    }
+}

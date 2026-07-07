@@ -1,0 +1,10 @@
+# Build Caddy with Cloudflare DNS plugin for ACME DNS challenge
+# Rebuild when upgrading Caddy: docker build -t ymi_caddy:2.9.1 -f Dockerfile.caddy .
+FROM caddy:2.9.1-builder AS builder
+
+RUN xcaddy build \
+    --with github.com/caddy-dns/cloudflare
+
+FROM caddy:2.9.1
+
+COPY --from=builder /usr/bin/caddy /usr/bin/caddy
