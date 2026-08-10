@@ -10,7 +10,7 @@ The public production website lives in the separate `ymiroofing.com.au` repo. Th
 
 ## Repository Structure
 
-```
+```text
 docs/
 ├── MASTER-DELIVERY.md      # end-to-end delivery / launch checklist
 ├── N8N-SETUP.md            # how to import + configure the n8n workflows
