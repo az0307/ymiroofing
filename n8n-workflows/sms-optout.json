@@ -71,7 +71,7 @@
       "parameters": {
         "from": "REPLACE_WITH_TWILIO_FROM_NUMBER",
         "to": "={{ $json.body.From || $json.From }}",
-        "message": "You have been unsubscribed from YMI Roofing SMS messages and will receive no further marketing texts. For enquiries call 0422 093 241."
+        "message": "You have been unsubscribed from YMI Roofing SMS messages and will receive no further marketing texts. For enquiries call 0423 858 503."
       },
       "id": "d4e5f6a7-b8c9-0123-defa-456789012004",
       "name": "Opt-Out Confirmation SMS",
