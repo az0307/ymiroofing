@@ -70,7 +70,7 @@
       "parameters": {
         "from": "REPLACE_WITH_TWILIO_FROM_NUMBER",
         "to": "={{ $json.Phone }}",
-        "message": "=Hi {{ $json.Name }}, it's Ben from YMI Roofing. With summer coming up, now's the perfect time to check your roof before the wet season. We offer free re-inspections for past customers — call or text 0422 093 241 to book. Reply STOP to opt out."
+        "message": "=Hi {{ $json.Name }}, it's Ben from YMI Roofing. With summer coming up, now's the perfect time to check your roof before the wet season. We offer free re-inspections for past customers — call or text 0423 858 503 to book. Reply STOP to opt out."
       },
       "id": "e5f6a7b8-c9d0-1234-efab-567890123004",
       "name": "Send Maintenance Reminder",
