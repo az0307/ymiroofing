@@ -107,7 +107,21 @@ In Twilio Console → Phone Numbers → your AU number:
 
 ## Step 7 — Activate workflows
 
-Open each workflow and toggle **Active** (top-right). Do this for all 5.
+Do not skip the compliance checklist below before toggling anything on.
+
+- [ ] The **Opt-Outs** tab exists on the spreadsheet, with the header row
+      `Phone | Opted Out | Message`. Every sending workflow reads it on each run
+      and will stop with an error if it is missing — deliberately, so that a
+      misconfigured sheet cannot result in texting someone who opted out.
+- [ ] `sms-optout.json` is activated **first**, and the Twilio Messaging webhook
+      (Step 6) points at it. Nothing else should be live before the handler that
+      records opt-outs is.
+- [ ] Send a test STOP from a phone you control and confirm a row lands in the
+      Opt-Outs tab and a confirmation SMS comes back.
+- [ ] Add that same number to a test row in Leads or Jobs, run the relevant
+      workflow manually, and confirm **no** message is sent to it.
+
+Then toggle **Active** (top-right) on the remaining workflows.
 
 ---
 
@@ -131,6 +145,67 @@ Open each workflow and toggle **Active** (top-right). Do this for all 5.
 | `missed-call.json` | Twilio voice webhook | Sends SMS callback promise to missed caller |
 | `sms-optout.json` | Twilio inbound SMS | Logs STOP requests → confirms opt-out |
 | `maintenance-reminder.json` | 1 Sep annually 9am | Sends pre-summer reminder to past customers |
+
+Every send to a customer — not to Ben — passes through a **Suppress Opted-Out**
+node first. See below.
+
+---
+
+## SMS compliance
+
+Australian marketing SMS is governed by the *Spam Act 2003* (Cth). Three
+obligations matter here, and each is enforced by a specific node rather than by
+remembering to do it:
+
+| Obligation | Where it is enforced |
+|---|---|
+| s16 — do not message someone who has withdrawn consent | `Suppress Opted-Out` sits immediately before every customer-facing Twilio node |
+| s17 — identify the sender | Every message names YMI Roofing in its body |
+| s18 — provide a working unsubscribe | Every customer-facing message ends `Reply STOP to opt out.` |
+
+### How the suppression gate works
+
+Each sending workflow reads the **Opt-Outs** tab into a node called
+`Read Opt-Out List`, then filters the recipients through a Code node called
+`Suppress Opted-Out`. Numbers are compared on their **last 9 digits**, so
+`0423 858 503`, `+61423858503` and `61 423 858 503` are recognised as the same
+person regardless of how each was recorded.
+
+Two failure modes are handled deliberately:
+
+- **Empty Opt-Outs tab.** `Read Opt-Out List` has `alwaysOutputData` set, so an
+  empty list emits one blank item and messages still go out. Without it, an
+  empty list would silently halt every workflow.
+- **Missing or unreadable Opt-Outs tab.** The node errors and the workflow
+  stops. This fails *closed*: no list means no send. Do not "fix" this by
+  setting the node to continue on error.
+
+### The AI-composed review message
+
+`ymi-review-machine.json` writes its message with Gemini. A language model
+cannot be relied on to include an unsubscribe line, or to phrase it in a way the
+opt-out handler recognises. `Build SMS Text` therefore strips whatever trailing
+opt-out wording the model produced and appends the exact sentence
+`Reply STOP to opt out.`, reserving room for it inside the character limit so it
+is never truncated away.
+
+### What counts as STOP
+
+`sms-optout.json` normalises the inbound message (uppercase, punctuation
+stripped, whitespace collapsed) and matches it against the whole set of common
+opt-out keywords — `STOP`, `STOP ALL`, `UNSUBSCRIBE`, `END`, `QUIT`, `CANCEL`,
+`OPT OUT`, `REMOVE`, `NO MORE`, `DELETE` — optionally wrapped in "please".
+
+The match is against the **entire** message, not a substring. A reply of
+"Stop by tomorrow at 9" is a customer asking Ben to visit, and does not
+unsubscribe them.
+
+### Two things to check before the first real send
+
+- Twilio must not also be auto-replying to STOP with its own Advanced Opt-Out,
+  or the customer gets two confirmations.
+- The Opt-Outs tab is the single source of truth. If opt-outs are ever recorded
+  anywhere else, they are not being honoured.
 
 ---
 

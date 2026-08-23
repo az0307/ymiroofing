@@ -13,19 +13,29 @@
       "name": "Inbound SMS Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1.1,
-      "position": [250, 300],
+      "position": [
+        250,
+        300
+      ],
       "webhookId": "ymi-sms-inbound"
     },
     {
       "parameters": {
         "conditions": {
-          "options": {"caseSensitive": false, "leftValue": "", "typeValidation": "loose"},
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
           "conditions": [
             {
               "id": "oo1",
-              "leftValue": "={{ ($json.body.Body || $json.Body || '').toUpperCase() }}",
-              "rightValue": "STOP",
-              "operator": {"type": "string", "operation": "contains"}
+              "leftValue": "={{ ($json.body.Body || $json.Body || '').toUpperCase().replace(/[^A-Z ]/g, ' ').replace(/\\s+/g, ' ').trim() }}",
+              "rightValue": "^(PLEASE )?(STOP|STOP ALL|STOPALL|UNSUBSCRIBE|UNSUB|END|QUIT|CANCEL|OPT OUT|OPTOUT|REMOVE|REMOVE ME|NO MORE|DELETE)( PLEASE)?$",
+              "operator": {
+                "type": "string",
+                "operation": "regex"
+              }
             }
           ],
           "combinator": "and"
@@ -36,13 +46,24 @@
       "name": "Is STOP Request?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [470, 300]
+      "position": [
+        470,
+        300
+      ]
     },
     {
       "parameters": {
         "operation": "append",
-        "documentId": {"__rl": true, "value": "REPLACE_WITH_SPREADSHEET_ID", "mode": "id"},
-        "sheetName": {"__rl": true, "value": "Opt-Outs", "mode": "name"},
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Opt-Outs",
+          "mode": "name"
+        },
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
@@ -59,7 +80,10 @@
       "name": "Log Opt-Out",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.2,
-      "position": [690, 200],
+      "position": [
+        690,
+        200
+      ],
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "REPLACE_WITH_GOOGLE_CREDENTIAL_ID",
@@ -71,13 +95,16 @@
       "parameters": {
         "from": "REPLACE_WITH_TWILIO_FROM_NUMBER",
         "to": "={{ $json.body.From || $json.From }}",
-        "message": "You have been unsubscribed from YMI Roofing SMS messages and will receive no further marketing texts. For enquiries call 0422 093 241."
+        "message": "You have been unsubscribed from YMI Roofing SMS messages and will receive no further marketing texts. For enquiries call 0423 858 503."
       },
       "id": "d4e5f6a7-b8c9-0123-defa-456789012004",
       "name": "Opt-Out Confirmation SMS",
       "type": "n8n-nodes-base.twilio",
       "typeVersion": 1,
-      "position": [910, 200],
+      "position": [
+        910,
+        200
+      ],
       "credentials": {
         "twilioApi": {
           "id": "REPLACE_WITH_TWILIO_CREDENTIAL_ID",
@@ -88,16 +115,38 @@
   ],
   "connections": {
     "Inbound SMS Webhook": {
-      "main": [[{"node": "Is STOP Request?", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Is STOP Request?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Is STOP Request?": {
       "main": [
-        [{"node": "Log Opt-Out", "type": "main", "index": 0}],
+        [
+          {
+            "node": "Log Opt-Out",
+            "type": "main",
+            "index": 0
+          }
+        ],
         []
       ]
     },
     "Log Opt-Out": {
-      "main": [[{"node": "Opt-Out Confirmation SMS", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Opt-Out Confirmation SMS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": false,
@@ -108,5 +157,9 @@
     "saveDataErrorExecution": "all"
   },
   "versionId": "d4e5f6a7-b8c9-0123-defa-456789012000",
-  "tags": [{"name": "ymi-roofing"}]
+  "tags": [
+    {
+      "name": "ymi-roofing"
+    }
+  ]
 }
