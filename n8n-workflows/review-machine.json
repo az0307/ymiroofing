@@ -4,50 +4,80 @@
     {
       "parameters": {
         "rule": {
-          "interval": [{"field": "cronExpression", "expression": "0 10 * * 1-5"}]
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 10 * * 1-5"
+            }
+          ]
         }
       },
       "id": "b2c3d4e5-f6a7-8901-bcde-f23456789001",
       "name": "Weekdays 10am",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.1,
-      "position": [250, 300]
+      "position": [
+        250,
+        300
+      ]
     },
     {
       "parameters": {
         "operation": "read",
-        "documentId": {"__rl": true, "value": "REPLACE_WITH_SPREADSHEET_ID", "mode": "id"},
-        "sheetName": {"__rl": true, "value": "Jobs", "mode": "name"},
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Jobs",
+          "mode": "name"
+        },
         "options": {}
       },
       "id": "b2c3d4e5-f6a7-8901-bcde-f23456789002",
       "name": "Read Jobs Sheet",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.2,
-      "position": [470, 300],
+      "position": [
+        470,
+        300
+      ],
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "REPLACE_WITH_GOOGLE_CREDENTIAL_ID",
           "name": "Google Sheets — YMI Roofing"
         }
-      }
+      },
+      "executeOnce": true
     },
     {
       "parameters": {
         "conditions": {
-          "options": {"caseSensitive": false, "leftValue": "", "typeValidation": "loose"},
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
           "conditions": [
             {
               "id": "c1",
               "leftValue": "={{ $json.Status }}",
               "rightValue": "Completed",
-              "operator": {"type": "string", "operation": "equals"}
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
             },
             {
               "id": "c2",
               "leftValue": "={{ $json['Review Requested'] || '' }}",
               "rightValue": "",
-              "operator": {"type": "string", "operation": "equals"}
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
             }
           ],
           "combinator": "and"
@@ -58,7 +88,10 @@
       "name": "Completed & No Review Sent",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [690, 300]
+      "position": [
+        690,
+        300
+      ]
     },
     {
       "parameters": {
@@ -70,7 +103,10 @@
       "name": "Send Review Request SMS",
       "type": "n8n-nodes-base.twilio",
       "typeVersion": 1,
-      "position": [910, 200],
+      "position": [
+        910,
+        200
+      ],
       "credentials": {
         "twilioApi": {
           "id": "REPLACE_WITH_TWILIO_CREDENTIAL_ID",
@@ -81,15 +117,25 @@
     {
       "parameters": {
         "operation": "update",
-        "documentId": {"__rl": true, "value": "REPLACE_WITH_SPREADSHEET_ID", "mode": "id"},
-        "sheetName": {"__rl": true, "value": "Jobs", "mode": "name"},
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Jobs",
+          "mode": "name"
+        },
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
             "row_number": "={{ $json.row_number }}",
             "Review Requested": "={{ $now.format('dd/MM/yyyy') }}"
           },
-          "matchingColumns": ["row_number"],
+          "matchingColumns": [
+            "row_number"
+          ],
           "schema": []
         },
         "options": {}
@@ -98,30 +144,129 @@
       "name": "Mark Review Requested",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.2,
-      "position": [1130, 200],
+      "position": [
+        1130,
+        200
+      ],
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "REPLACE_WITH_GOOGLE_CREDENTIAL_ID",
           "name": "Google Sheets — YMI Roofing"
         }
       }
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Opt-Outs",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "name": "Read Opt-Out List",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        360,
+        460
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_GOOGLE_CREDENTIAL_ID",
+          "name": "Google Sheets — YMI Roofing"
+        }
+      },
+      "id": "b2c3d4e5-f6a7-8901-bcde-f23456789006"
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * Spam Act 2003 (Cth) s16 - opt-out suppression gate.\n *\n * Every customer-facing Twilio send in this workflow sits behind this node.\n * An item that does not come out of here is never texted.\n *\n * Recipients are matched on their last 9 digits, so 0423 858 503,\n * +61423858503 and 61 423 858 503 all resolve to the same person.\n *\n * If the Opt-Outs sheet cannot be read, \"Read Opt-Out List\" fails and the\n * workflow stops before this node runs. That is deliberate: no list, no send.\n */\nconst key = (raw) => {\n  const digits = String(raw ?? '').replace(/\\D/g, '');\n  return digits.length >= 9 ? digits.slice(-9) : '';\n};\n\nconst optedOut = new Set(\n  $('Read Opt-Out List').all().map((row) => key(row.json.Phone)).filter(Boolean)\n);\n\nconst allowed = [];\nfor (const item of $input.all()) {\n  const recipient = key(item.json.Phone);\n  if (!recipient) continue;              // no usable number - nothing to send\n  if (optedOut.has(recipient)) continue; // replied STOP - must not be contacted\n  allowed.push(item);\n}\nreturn allowed;\n"
+      },
+      "name": "Suppress Opted-Out",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        200
+      ],
+      "id": "b2c3d4e5-f6a7-8901-bcde-f23456789007"
     }
   ],
   "connections": {
     "Weekdays 10am": {
-      "main": [[{"node": "Read Jobs Sheet", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Read Opt-Out List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Read Jobs Sheet": {
-      "main": [[{"node": "Completed & No Review Sent", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Completed & No Review Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Completed & No Review Sent": {
       "main": [
-        [{"node": "Send Review Request SMS", "type": "main", "index": 0}],
+        [
+          {
+            "node": "Suppress Opted-Out",
+            "type": "main",
+            "index": 0
+          }
+        ],
         []
       ]
     },
     "Send Review Request SMS": {
-      "main": [[{"node": "Mark Review Requested", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Mark Review Requested",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Opt-Out List": {
+      "main": [
+        [
+          {
+            "node": "Read Jobs Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Suppress Opted-Out": {
+      "main": [
+        [
+          {
+            "node": "Send Review Request SMS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": false,
@@ -132,5 +277,9 @@
     "saveDataErrorExecution": "all"
   },
   "versionId": "b2c3d4e5-f6a7-8901-bcde-f23456789000",
-  "tags": [{"name": "ymi-roofing"}]
+  "tags": [
+    {
+      "name": "ymi-roofing"
+    }
+  ]
 }
