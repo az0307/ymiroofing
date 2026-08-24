@@ -138,7 +138,7 @@
         300
       ],
       "parameters": {
-        "jsCode": "const geminiResponse = $input.first().json;\nconst rawText = geminiResponse.candidates?.[0]?.content?.parts?.[0]?.text ?? '';\n\nconst job = $('Process Each Job').first().json;\nconst reviewLink = $vars.GOOGLE_REVIEW_LINK ?? 'https://g.page/r/review';\n\n/**\n * Spam Act 2003 (Cth) s18 - every commercial SMS must carry a working\n * unsubscribe facility. The wording above is written by a language model and\n * cannot be relied on to include one, or to phrase it in a way the opt-out\n * handler recognises. Strip whatever it invented and append the exact\n * sentence \"YMI Roofing - SMS Opt-Out Handler\" actually matches on.\n */\nconst OPT_OUT = 'Reply STOP to opt out.';\n\nlet body = rawText\n  .replace('[REVIEW_LINK]', reviewLink)\n  .replace(/\\s*(reply\\s+)?stop\\b[^.!?]*[.!?]?\\s*$/i, '')\n  .trim();\n\n// Leave room for the opt-out sentence rather than truncating it away.\nbody = body.slice(0, 320 - OPT_OUT.length - 1).trim();\n\nconst sms = (body + ' ' + OPT_OUT).trim();\n\nreturn [{\n  json: {\n    job_id:          job['Job ID'] ?? '',\n    customer_name:   job['Customer Name'] ?? '',\n    customer_phone:  job['Customer Phone'] ?? '',\n    suburb:          job['Suburb'] ?? '',\n    service:         job['Service'] ?? '',\n    sms_text:        sms,\n    review_link:     reviewLink,\n    sent_at:         new Date().toISOString()\n  }\n}];"
+        "jsCode": "const geminiResponse = $input.first().json;\nconst rawText = geminiResponse.candidates?.[0]?.content?.parts?.[0]?.text ?? '';\n\nconst job = $('Process Each Job').first().json;\nconst reviewLink = $vars.GOOGLE_REVIEW_LINK ?? 'https://g.page/r/review';\n\n/**\n * Spam Act 2003 (Cth) s18 - every commercial SMS must carry a working\n * unsubscribe facility. The wording above is written by a language model and\n * cannot be relied on to include one, or to phrase it in a way the opt-out\n * handler recognises. Strip whatever it invented and append the exact\n * sentence \"YMI Roofing - SMS Opt-Out Handler\" actually matches on.\n */\nconst OPT_OUT = 'Reply STOP to opt out.';\n\nlet body = rawText\n  .replace('[REVIEW_LINK]', reviewLink)\n  // Only strip a trailing sentence that is actually an opt-out instruction —\n  // matching bare \"stop\" would eat real copy like \"we can stop by to inspect\".\n  .replace(/\\s*(reply\\s+)?stop\\b[^.!?]*\\b(opt\\s*-?\\s*out|unsubscribe|no more)\\b[^.!?]*[.!?]?\\s*$/i, '')\n  .trim();\n\n// Leave room for the opt-out sentence rather than truncating it away.\nbody = body.slice(0, 320 - OPT_OUT.length - 1).trim();\n\nconst sms = (body + ' ' + OPT_OUT).trim();\n\nreturn [{\n  json: {\n    job_id:          job['Job ID'] ?? '',\n    customer_name:   job['Customer Name'] ?? '',\n    customer_phone:  job['Customer Phone'] ?? '',\n    suburb:          job['Suburb'] ?? '',\n    service:         job['Service'] ?? '',\n    sms_text:        sms,\n    review_link:     reviewLink,\n    sent_at:         new Date().toISOString()\n  }\n}];"
       }
     },
     {
@@ -303,16 +303,49 @@
     },
     {
       "parameters": {
-        "jsCode": "/**\n * Spam Act 2003 (Cth) s16 - opt-out suppression gate.\n *\n * Every customer-facing Twilio send in this workflow sits behind this node.\n * An item that does not come out of here is never texted.\n *\n * Recipients are matched on their last 9 digits, so 0423 858 503,\n * +61423858503 and 61 423 858 503 all resolve to the same person.\n *\n * If the Opt-Outs sheet cannot be read, \"Read Opt-Out List\" fails and the\n * workflow stops before this node runs. That is deliberate: no list, no send.\n */\nconst key = (raw) => {\n  const digits = String(raw ?? '').replace(/\\D/g, '');\n  return digits.length >= 9 ? digits.slice(-9) : '';\n};\n\nconst optedOut = new Set(\n  $('Read Opt-Out List').all().map((row) => key(row.json.Phone)).filter(Boolean)\n);\n\nconst allowed = [];\nfor (const item of $input.all()) {\n  const recipient = key(item.json.customer_phone);\n  if (!recipient) continue;              // no usable number - nothing to send\n  if (optedOut.has(recipient)) continue; // replied STOP - must not be contacted\n  allowed.push(item);\n}\nreturn allowed;\n"
+        "jsCode": "/**\n * Spam Act 2003 (Cth) s16 - opt-out matching.\n *\n * This workflow walks its jobs with a SplitInBatches loop, so a suppressed\n * recipient cannot simply be dropped. An item that goes nowhere never returns\n * to \"Process Each Job\", the loop stalls, and every remaining job is silently\n * skipped. So this node always emits exactly one item and flags it instead;\n * \"On Opt-Out List?\" is what routes a flagged item back into the loop.\n *\n * Recipients match on their last 9 digits, so 0423 858 503, +61423858503 and\n * 61 423 858 503 all resolve to the same person.\n */\nconst key = (raw) => {\n  const digits = String(raw ?? '').replace(/\\D/g, '');\n  return digits.length >= 9 ? digits.slice(-9) : '';\n};\n\nconst optedOut = new Set(\n  $('Read Opt-Out List').all().map((row) => key(row.json.Phone)).filter(Boolean)\n);\n\nconst item = $input.first();\nconst recipient = key(item.json.customer_phone);\n\n// No usable number is treated the same as an opt-out: do not send.\nitem.json.opted_out = !recipient || optedOut.has(recipient);\nreturn [item];"
       },
-      "name": "Suppress Opted-Out",
+      "id": "b2c3d4e5-0011-0011-0011-000000000011",
+      "name": "Match Against Opt-Out List",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         1540,
         220
-      ],
-      "id": "b2c3d4e5-0011-0011-0011-000000000011"
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "oo-gate",
+              "leftValue": "={{ $json.opted_out }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b2c3d4e5-0012-0012-0012-000000000012",
+      "name": "On Opt-Out List?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        220
+      ]
     }
   ],
   "connections": {
@@ -409,7 +442,7 @@
       "main": [
         [
           {
-            "node": "Suppress Opted-Out",
+            "node": "Match Against Opt-Out List",
             "type": "main",
             "index": 0
           }
@@ -452,8 +485,26 @@
         ]
       ]
     },
-    "Suppress Opted-Out": {
+    "Match Against Opt-Out List": {
       "main": [
+        [
+          {
+            "node": "On Opt-Out List?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On Opt-Out List?": {
+      "main": [
+        [
+          {
+            "node": "Process Each Job",
+            "type": "main",
+            "index": 0
+          }
+        ],
         [
           {
             "node": "Send Review SMS",

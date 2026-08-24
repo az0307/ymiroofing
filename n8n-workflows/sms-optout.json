@@ -31,7 +31,7 @@
             {
               "id": "oo1",
               "leftValue": "={{ ($json.body.Body || $json.Body || '').toUpperCase().replace(/[^A-Z ]/g, ' ').replace(/\\s+/g, ' ').trim() }}",
-              "rightValue": "^(PLEASE )?(STOP|STOP ALL|STOPALL|UNSUBSCRIBE|UNSUB|END|QUIT|CANCEL|OPT OUT|OPTOUT|REMOVE|REMOVE ME|NO MORE|DELETE)( PLEASE)?$",
+              "rightValue": "^(PLEASE )?(STOP|STOPALL|STOP ALL|UNSUBSCRIBE|UNSUB|END|QUIT|CANCEL|OPT OUT|OPTOUT|REMOVE|REMOVE ME|NO MORE|DELETE)( PLEASE)?$|^(STOP|UNSUBSCRIBE|QUIT|CANCEL|END|OPTOUT|REMOVE)\\b|\\b(UNSUBSCRIBE|OPT OUT|OPTOUT|REMOVE ME|TAKE ME OFF|NO MORE|DO NOT TEXT|DONT TEXT|DO NOT CONTACT|DONT CONTACT|DO NOT MESSAGE|STOP TEXTING|STOP MESSAGING|STOP SENDING|STOP CONTACTING)\\b",
               "operator": {
                 "type": "string",
                 "operation": "regex"

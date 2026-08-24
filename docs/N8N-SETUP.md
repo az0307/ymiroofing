@@ -118,8 +118,16 @@ Do not skip the compliance checklist below before toggling anything on.
       records opt-outs is.
 - [ ] Send a test STOP from a phone you control and confirm a row lands in the
       Opt-Outs tab and a confirmation SMS comes back.
-- [ ] Add that same number to a test row in Leads or Jobs, run the relevant
-      workflow manually, and confirm **no** message is sent to it.
+- [ ] Add that same number to a test row in Leads *and* Jobs, then run **each**
+      sending workflow manually — `lead-capture`, `review-machine`,
+      `maintenance-reminder`, `missed-call` and `ymi-review-machine` — and
+      confirm no message is sent to it in any of them. Running only one is not
+      enough: this is the step that catches a workflow pointed at the wrong
+      spreadsheet, and it has to be proven per workflow.
+- [ ] For `ymi-review-machine.json` specifically, put the opted-out number
+      **first** in the Jobs sheet with at least one other completed job after it,
+      and confirm the later job still gets its text. That proves the batch loop
+      keeps running past a suppressed recipient.
 
 Then toggle **Active** (top-right) on the remaining workflows.
 
@@ -166,10 +174,32 @@ remembering to do it:
 ### How the suppression gate works
 
 Each sending workflow reads the **Opt-Outs** tab into a node called
-`Read Opt-Out List`, then filters the recipients through a Code node called
-`Suppress Opted-Out`. Numbers are compared on their **last 9 digits**, so
-`0423 858 503`, `+61423858503` and `61 423 858 503` are recognised as the same
-person regardless of how each was recorded.
+`Read Opt-Out List`, then filters the recipients before they reach Twilio.
+Numbers are compared on their **last 9 digits**, so `0423 858 503`,
+`+61423858503` and `61 423 858 503` are recognised as the same person
+regardless of how each was recorded.
+
+The gate takes two shapes, because the workflows have two shapes:
+
+| Workflow | Gate |
+|---|---|
+| `lead-capture.json`, `review-machine.json`, `maintenance-reminder.json`, `missed-call.json` | A single Code node, `Suppress Opted-Out`, which simply drops suppressed items |
+| `ymi-review-machine.json` | A pair — `Match Against Opt-Out List` (Code) flags the item, then `On Opt-Out List?` (IF) routes it |
+
+The pair exists because `ymi-review-machine.json` walks its jobs with a
+SplitInBatches loop. In a loop, a dropped item is not harmless: an item that
+goes nowhere never returns to `Process Each Job`, so the loop stalls and every
+remaining job is silently skipped. The flag-and-route pair always sends the item
+somewhere — either to Twilio, or straight back into the loop.
+
+> **Both spreadsheets must be the same spreadsheet.** `sms-optout.json` *writes*
+> opt-outs, and every sending workflow *reads* them, but they do not all name the
+> spreadsheet the same way — the `ymi-` prefixed workflows use
+> `{{ $vars.GOOGLE_SHEET_ID }}` while the others use a literal
+> `REPLACE_WITH_SPREADSHEET_ID`. Point them at different sheets and the gate
+> reads an Opt-Outs tab nobody writes to, finds it empty, and **fails open** —
+> texting the very people who opted out, with no error to tell you. The
+> Step 7 checklist below is what catches this; do not skip it.
 
 Two failure modes are handled deliberately:
 
