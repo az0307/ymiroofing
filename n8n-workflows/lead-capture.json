@@ -150,7 +150,7 @@
       "parameters": {
         "from": "REPLACE_WITH_TWILIO_FROM_NUMBER",
         "to": "={{ $('Extract Fields').item.json.Phone }}",
-        "message": "=Hi {{ $('Extract Fields').first().json.Name }}, thanks for contacting YMI Roofing! Ben will be in touch within 2 business hours. For urgent enquiries call 0423 858 503. Reply STOP to opt out."
+        "message": "=Hi {{ $('Extract Fields').first().json.Name }}, thanks for contacting YMI Roofing! Ben will be in touch within 2 business hours. For urgent enquiries call 0422 093 241. Reply STOP to opt out."
       },
       "id": "f3a1b2c4-d5e6-7890-abcd-ef1234567805",
       "name": "Confirmation SMS to Lead",
@@ -200,7 +200,7 @@
     },
     {
       "parameters": {
-        "jsCode": "/**\n * Spam Act 2003 (Cth) s16 - opt-out suppression gate.\n *\n * Every customer-facing Twilio send in this workflow sits behind this node.\n * An item that does not come out of here is never texted.\n *\n * Recipients are matched on their last 9 digits, so 0423 858 503,\n * +61423858503 and 61 423 858 503 all resolve to the same person.\n *\n * If the Opt-Outs sheet cannot be read, \"Read Opt-Out List\" fails and the\n * workflow stops before this node runs. That is deliberate: no list, no send.\n */\nconst key = (raw) => {\n  const digits = String(raw ?? '').replace(/\\D/g, '');\n  return digits.length >= 9 ? digits.slice(-9) : '';\n};\n\nconst optedOut = new Set(\n  $('Read Opt-Out List').all().map((row) => key(row.json.Phone)).filter(Boolean)\n);\n\n// Rebuilt from \"Extract Fields\" so the nodes after this one keep seeing the\n// item they expect, rather than rows from the Opt-Outs sheet.\nconst source = $('Extract Fields').first();\nconst recipient = key(source.json.Phone);\n\nif (!recipient) return [];              // no usable number - nothing to send\nif (optedOut.has(recipient)) return []; // replied STOP - must not be contacted\nreturn [source];\n"
+        "jsCode": "/**\n * Spam Act 2003 (Cth) s16 - opt-out suppression gate.\n *\n * Every customer-facing Twilio send in this workflow sits behind this node.\n * An item that does not come out of here is never texted.\n *\n * Recipients are matched on their last 9 digits, so 0422 093 241,\n * +61423858503 and 61 423 858 503 all resolve to the same person.\n *\n * If the Opt-Outs sheet cannot be read, \"Read Opt-Out List\" fails and the\n * workflow stops before this node runs. That is deliberate: no list, no send.\n */\nconst key = (raw) => {\n  const digits = String(raw ?? '').replace(/\\D/g, '');\n  return digits.length >= 9 ? digits.slice(-9) : '';\n};\n\nconst optedOut = new Set(\n  $('Read Opt-Out List').all().map((row) => key(row.json.Phone)).filter(Boolean)\n);\n\n// Rebuilt from \"Extract Fields\" so the nodes after this one keep seeing the\n// item they expect, rather than rows from the Opt-Outs sheet.\nconst source = $('Extract Fields').first();\nconst recipient = key(source.json.Phone);\n\nif (!recipient) return [];              // no usable number - nothing to send\nif (optedOut.has(recipient)) return []; // replied STOP - must not be contacted\nreturn [source];\n"
       },
       "name": "Suppress Opted-Out",
       "type": "n8n-nodes-base.code",

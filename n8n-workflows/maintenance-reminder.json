@@ -106,7 +106,7 @@
       "parameters": {
         "from": "REPLACE_WITH_TWILIO_FROM_NUMBER",
         "to": "={{ $json.Phone }}",
-        "message": "=Hi {{ $json.Name }}, it's Ben from YMI Roofing. With summer coming up, now's the perfect time to check your roof before the wet season. We offer free re-inspections for past customers — call or text 0423 858 503 to book. Reply STOP to opt out."
+        "message": "=Hi {{ $json.Name }}, it's Ben from YMI Roofing. With summer coming up, now's the perfect time to check your roof before the wet season. We offer free re-inspections for past customers — call or text 0422 093 241 to book. Reply STOP to opt out."
       },
       "id": "e5f6a7b8-c9d0-1234-efab-567890123004",
       "name": "Send Maintenance Reminder",
@@ -197,7 +197,7 @@
     },
     {
       "parameters": {
-        "jsCode": "/**\n * Spam Act 2003 (Cth) s16 - opt-out suppression gate.\n *\n * Every customer-facing Twilio send in this workflow sits behind this node.\n * An item that does not come out of here is never texted.\n *\n * Recipients are matched on their last 9 digits, so 0423 858 503,\n * +61423858503 and 61 423 858 503 all resolve to the same person.\n *\n * If the Opt-Outs sheet cannot be read, \"Read Opt-Out List\" fails and the\n * workflow stops before this node runs. That is deliberate: no list, no send.\n */\nconst key = (raw) => {\n  const digits = String(raw ?? '').replace(/\\D/g, '');\n  return digits.length >= 9 ? digits.slice(-9) : '';\n};\n\nconst optedOut = new Set(\n  $('Read Opt-Out List').all().map((row) => key(row.json.Phone)).filter(Boolean)\n);\n\nconst allowed = [];\nfor (const item of $input.all()) {\n  const recipient = key(item.json.Phone);\n  if (!recipient) continue;              // no usable number - nothing to send\n  if (optedOut.has(recipient)) continue; // replied STOP - must not be contacted\n  allowed.push(item);\n}\nreturn allowed;\n"
+        "jsCode": "/**\n * Spam Act 2003 (Cth) s16 - opt-out suppression gate.\n *\n * Every customer-facing Twilio send in this workflow sits behind this node.\n * An item that does not come out of here is never texted.\n *\n * Recipients are matched on their last 9 digits, so 0422 093 241,\n * +61423858503 and 61 423 858 503 all resolve to the same person.\n *\n * If the Opt-Outs sheet cannot be read, \"Read Opt-Out List\" fails and the\n * workflow stops before this node runs. That is deliberate: no list, no send.\n */\nconst key = (raw) => {\n  const digits = String(raw ?? '').replace(/\\D/g, '');\n  return digits.length >= 9 ? digits.slice(-9) : '';\n};\n\nconst optedOut = new Set(\n  $('Read Opt-Out List').all().map((row) => key(row.json.Phone)).filter(Boolean)\n);\n\nconst allowed = [];\nfor (const item of $input.all()) {\n  const recipient = key(item.json.Phone);\n  if (!recipient) continue;              // no usable number - nothing to send\n  if (optedOut.has(recipient)) continue; // replied STOP - must not be contacted\n  allowed.push(item);\n}\nreturn allowed;\n"
       },
       "name": "Suppress Opted-Out",
       "type": "n8n-nodes-base.code",
